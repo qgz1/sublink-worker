@@ -1,30 +1,3 @@
-// utils.js 中 getGeoInfo
-export async function getGeoInfo(ip) {
-  try {
-    const response = await fetch(`http://ip-api.com/json/${ip}?lang=zh-CN`);
-    const data = await response.json();
-
-    if (data.status !== 'success') throw new Error(`GeoIP lookup failed for IP: ${ip}`);
-
-    if (data.country !== 'China') {
-      return { country: '中国', region: '北京', city: '本地', isp: '本地网络', emoji: '🇨🇳' };
-    }
-
-    return {
-      country: data.country,
-      region: data.regionName,
-      city: data.city,
-      isp: data.isp,
-      emoji: data.countryCode
-        ? String.fromCodePoint(0x1F1E6 + data.countryCode.charCodeAt(0) - 65) +
-          String.fromCodePoint(0x1F1E6 + data.countryCode.charCodeAt(1) - 65)
-        : '',
-    };
-  } catch {
-    return { country: '中国', region: '北京', city: '本地', isp: '本地网络', emoji: '🇨🇳' };
-  }
-}
-
 // ProxyParser.js
 import { getGeoInfo, parseServerInfo, parseUrlParams, createTlsConfig, createTransportConfig, decodeBase64, base64ToBinary } from './utils.js';
 
