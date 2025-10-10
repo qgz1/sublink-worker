@@ -1,6 +1,6 @@
-// config.ts
+// config.js
 // ================================
-// 完整配置文件（TypeScript）：Singbox / Clash / Surge
+// 完整配置文件：Singbox / Clash / Surge
 // ================================
 
 export const SITE_RULE_SET_BASE_URL = 'https://gh-proxy.com/https://raw.githubusercontent.com/lyc8503/sing-box-rules/refs/heads/rule-set-geosite/';
@@ -10,26 +10,10 @@ export const CLASH_IP_RULE_SET_BASE_URL = 'https://gh-proxy.com/https://github.c
 export const SURGE_SITE_RULE_SET_BASEURL = 'https://gh-proxy.com/https://github.com/NSZA156/surge-geox-rules/raw/refs/heads/release/geo/geosite/';
 export const SURGE_IP_RULE_SET_BASEURL = 'https://gh-proxy.com/https://github.com/NSZA156/surge-geox-rules/raw/refs/heads/release/geo/geoip/';
 
-export interface CustomRule {
-  name: string;
-  site?: string;
-  ip?: string;
-  domain_suffix?: string;
-  domain_keyword?: string;
-  ip_cidr?: string;
-  protocol?: string;
-}
-
-export const CUSTOM_RULES: CustomRule[] = [];
+export const CUSTOM_RULES = [];
 
 // ===== Unified Rules =====
-export interface UnifiedRule {
-  name: string;
-  site_rules: string[];
-  ip_rules: string[];
-}
-
-export const UNIFIED_RULES: UnifiedRule[] = [
+export const UNIFIED_RULES = [
   { name: 'Ad Block', site_rules: ['category-ads-all'], ip_rules: [] },
   { name: 'AI Services', site_rules: ['category-ai-!cn'], ip_rules: [] },
   { name: 'Bilibili', site_rules: ['bilibili'], ip_rules: [] },
@@ -51,28 +35,18 @@ export const UNIFIED_RULES: UnifiedRule[] = [
 ];
 
 // ===== Predefined Rule Sets =====
-export const PREDEFINED_RULE_SETS: Record<string, string[]> = {
+export const PREDEFINED_RULE_SETS = {
   minimal: ['Location:CN','Private','Non-China'],
   balanced: ['Location:CN','Private','Non-China','Github','Google','Youtube','AI Services','Telegram'],
   comprehensive: UNIFIED_RULES.map(rule => rule.name)
 };
 
 // ===== Rule Generators =====
-export interface RuleItem {
-  site_rules: string[];
-  ip_rules: string[];
-  domain_suffix?: string[];
-  domain_keyword?: string[];
-  ip_cidr?: string[];
-  protocol?: string[];
-  outbound: string;
-}
-
-export function generateRules(selectedRules: string[] = [], customRules: CustomRule[] = []): RuleItem[] {
+export function generateRules(selectedRules = [], customRules = []) {
   if (typeof selectedRules === 'string' && PREDEFINED_RULE_SETS[selectedRules]) selectedRules = PREDEFINED_RULE_SETS[selectedRules];
   if (!selectedRules || selectedRules.length === 0) selectedRules = PREDEFINED_RULE_SETS.minimal;
 
-  const rules: RuleItem[] = [];
+  const rules = [];
   UNIFIED_RULES.forEach(rule => {
     if (selectedRules.includes(rule.name)) {
       rules.push({ site_rules: rule.site_rules, ip_rules: rule.ip_rules, outbound: rule.name });
@@ -81,12 +55,12 @@ export function generateRules(selectedRules: string[] = [], customRules: CustomR
 
   customRules.reverse().forEach(rule => {
     rules.unshift({
-      site_rules: rule.site?.split(',') || [],
-      ip_rules: rule.ip?.split(',') || [],
-      domain_suffix: rule.domain_suffix?.split(',') || [],
-      domain_keyword: rule.domain_keyword?.split(',') || [],
-      ip_cidr: rule.ip_cidr?.split(',') || [],
-      protocol: rule.protocol?.split(',') || [],
+      site_rules: rule.site ? rule.site.split(',') : [],
+      ip_rules: rule.ip ? rule.ip.split(',') : [],
+      domain_suffix: rule.domain_suffix ? rule.domain_suffix.split(',') : [],
+      domain_keyword: rule.domain_keyword ? rule.domain_keyword.split(',') : [],
+      ip_cidr: rule.ip_cidr ? rule.ip_cidr.split(',') : [],
+      protocol: rule.protocol ? rule.protocol.split(',') : [],
       outbound: rule.name
     });
   });
@@ -95,22 +69,14 @@ export function generateRules(selectedRules: string[] = [], customRules: CustomR
 }
 
 // 获取所有可用的 outbound 节点
-export function getOutbounds(): string[] {
+export function getOutbounds() {
   return UNIFIED_RULES.map(rule => rule.name);
 }
 
-export interface RuleSetItem {
-  tag: string;
-  type: 'remote' | 'local';
-  format: 'binary' | 'mrs';
-  url?: string;
-  path?: string;
-}
-
-export function generateRuleSets(selectedRules: string[] = [], customRules: CustomRule[] = []): { site_rule_sets: RuleSetItem[], ip_rule_sets: RuleSetItem[] } {
+export function generateRuleSets(selectedRules = [], customRules = []) {
   const selectedRulesSet = new Set(selectedRules || PREDEFINED_RULE_SETS.minimal);
-  const siteRuleSets = new Set<string>();
-  const ipRuleSets = new Set<string>();
+  const siteRuleSets = new Set();
+  const ipRuleSets = new Set();
 
   UNIFIED_RULES.forEach(rule => {
     if (selectedRulesSet.has(rule.name)) {
@@ -119,14 +85,14 @@ export function generateRuleSets(selectedRules: string[] = [], customRules: Cust
     }
   });
 
-  const site_rule_sets: RuleSetItem[] = Array.from(siteRuleSets).map(rule => ({
+  const site_rule_sets = Array.from(siteRuleSets).map(rule => ({
     tag: rule,
     type: 'remote',
     format: 'binary',
     url: `${SITE_RULE_SET_BASE_URL}geosite-${rule}.srs`
   }));
 
-  const ip_rule_sets: RuleSetItem[] = Array.from(ipRuleSets).map(rule => ({
+  const ip_rule_sets = Array.from(ipRuleSets).map(rule => ({
     tag: `${rule}-ip`,
     type: 'remote',
     format: 'binary',
@@ -136,10 +102,10 @@ export function generateRuleSets(selectedRules: string[] = [], customRules: Cust
   return { site_rule_sets, ip_rule_sets };
 }
 
-export function generateClashRuleSets(selectedRules: string[] = [], customRules: CustomRule[] = []) {
+export function generateClashRuleSets(selectedRules = [], customRules = []) {
   const selectedRulesSet = new Set(selectedRules || PREDEFINED_RULE_SETS.minimal);
-  const siteRuleSets = new Set<string>();
-  const ipRuleSets = new Set<string>();
+  const siteRuleSets = new Set();
+  const ipRuleSets = new Set();
 
   UNIFIED_RULES.forEach(rule => {
     if (selectedRulesSet.has(rule.name)) {
@@ -148,8 +114,8 @@ export function generateClashRuleSets(selectedRules: string[] = [], customRules:
     }
   });
 
-  const site_rule_providers: Record<string, any> = {};
-  const ip_rule_providers: Record<string, any> = {};
+  const site_rule_providers = {};
+  const ip_rule_providers = {};
 
   Array.from(siteRuleSets).forEach(rule => {
     site_rule_providers[rule] = {
