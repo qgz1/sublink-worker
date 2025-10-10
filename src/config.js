@@ -40,24 +40,6 @@ export const PREDEFINED_RULE_SETS = {
     comprehensive: UNIFIED_RULES.map(rule => rule.name)
 };
 
-/** 映射生成 Site/IP 规则 */
-export const SITE_RULE_SETS = UNIFIED_RULES.reduce((acc, rule) => {
-    rule.site_rules.forEach(site_rule => acc[site_rule] = `geosite-${site_rule}.srs`);
-    return acc;
-}, {});
-export const IP_RULE_SETS = UNIFIED_RULES.reduce((acc, rule) => {
-    rule.ip_rules.forEach(ip_rule => acc[ip_rule] = `geoip-${ip_rule}.srs`);
-    return acc;
-}, {});
-export const CLASH_SITE_RULE_SETS = UNIFIED_RULES.reduce((acc, rule) => {
-    rule.site_rules.forEach(site_rule => acc[site_rule] = `${site_rule}.mrs`);
-    return acc;
-}, {});
-export const CLASH_IP_RULE_SETS = UNIFIED_RULES.reduce((acc, rule) => {
-    rule.ip_rules.forEach(ip_rule => acc[ip_rule] = `${ip_rule}.mrs`);
-    return acc;
-}, {});
-
 /** 获取已选择的 outbound 列表 */
 export function getOutbounds(selectedRuleNames) {
     if (!selectedRuleNames || !Array.isArray(selectedRuleNames)) return [];
@@ -111,41 +93,15 @@ export function generateRuleSets(selectedRules = [], customRules = []) {
         tag: rule,
         type: 'remote',
         format: 'binary',
-        url: `${SITE_RULE_SET_BASE_URL}${SITE_RULE_SETS[rule]}`
+        url: `${SITE_RULE_SET_BASE_URL}geosite-${rule}.srs`
     }));
 
     const ip_rule_sets = Array.from(ipRuleSets).map(rule => ({
         tag: `${rule}-ip`,
         type: 'remote',
         format: 'binary',
-        url: `${IP_RULE_SET_BASE_URL}${IP_RULE_SETS[rule]}`
+        url: `${IP_RULE_SET_BASE_URL}geoip-${rule}.srs`
     }));
-
-    if(!selectedRules.includes('Non-China')) {
-        site_rule_sets.push({
-            tag: 'geolocation-!cn',
-            type: 'remote',
-            format: 'binary',
-            url: `${SITE_RULE_SET_BASE_URL}geosite-geolocation-!cn.srs`
-        });
-    }
-
-    if(customRules){
-        customRules.forEach(rule => {
-            rule.site?.split(',').forEach(site => site_rule_sets.push({
-                tag: site.trim(),
-                type: 'remote',
-                format: 'binary',
-                url: `${SITE_RULE_SET_BASE_URL}geosite-${site.trim()}.srs`
-            }));
-            rule.ip?.split(',').forEach(ip => ip_rule_sets.push({
-                tag: `${ip.trim()}-ip`,
-                type: 'remote',
-                format: 'binary',
-                url: `${IP_RULE_SET_BASE_URL}geoip-${ip.trim()}.srs`
-            }));
-        });
-    }
 
     return { site_rule_sets, ip_rule_sets };
 }
@@ -174,8 +130,8 @@ export function generateClashRuleSets(selectedRules = [], customRules = []) {
             type: 'http',
             format: 'mrs',
             behavior: 'domain',
-            url: `${CLASH_SITE_RULE_SET_BASE_URL}${CLASH_SITE_RULE_SETS[rule]}`,
-            path: `./ruleset/${CLASH_SITE_RULE_SETS[rule]}`,
+            url: `${CLASH_SITE_RULE_SET_BASE_URL}${rule}.mrs`,
+            path: `./ruleset/${rule}.mrs`,
             interval: 86400
         };
     });
@@ -185,8 +141,8 @@ export function generateClashRuleSets(selectedRules = [], customRules = []) {
             type: 'http',
             format: 'mrs',
             behavior: 'ipcidr',
-            url: `${CLASH_IP_RULE_SET_BASE_URL}${CLASH_IP_RULE_SETS[rule]}`,
-            path: `./ruleset/${CLASH_IP_RULE_SETS[rule]}`,
+            url: `${CLASH_IP_RULE_SET_BASE_URL}${rule}.mrs`,
+            path: `./ruleset/${rule}.mrs`,
             interval: 86400
         };
     });
@@ -194,12 +150,13 @@ export function generateClashRuleSets(selectedRules = [], customRules = []) {
     return { site_rule_providers, ip_rule_providers };
 }
 
-/** Surge 风格规则集 */
-export const SURGE_CONFIG = UNIFIED_RULES.map(rule => ({
-    name: rule.name,
-    outbound: rule.outbound,
-    site_rules: rule.site_rules,
-    ip_rules: rule.ip_rules,
-    site_rule_base: SURGE_SITE_RULE_SET_BASEURL,
-    ip_rule_base: SURGE_IP_RULE_SET_BASEURL
-}));
+/** Singbox 配置 */
+export const SING_BOX_CONFIG = {
+    rules: generateRules(),
+    rule_sets: generateRuleSets()
+};
+
+/** Clash 配置 */
+export const CLASH_CONFIG = {
+    rules: generateRules(),
+    rule_sets: generateCl
