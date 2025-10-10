@@ -1,221 +1,249 @@
-const PATH_LENGTH = 7;
-
-// 自定义的字符串前缀检查函数
-export function checkStartsWith(str, prefix) {
-  if (str === undefined || str === null || prefix === undefined || prefix === null) {
-    return false;
-  }
-  str = String(str);
-  prefix = String(prefix);
-  return str.slice(0, prefix.length) === prefix;
-}
-
-// Base64 编码函数
-export function encodeBase64(input) {
-  const encoder = new TextEncoder();
-  const utf8Array = encoder.encode(input);
-  let binaryString = '';
-  for (const byte of utf8Array) {
-    binaryString += String.fromCharCode(byte);
-  }
-  return base64FromBinary(binaryString);
-}
-
-// Base64 解码函数
-export function decodeBase64(input) {
-  const binaryString = base64ToBinary(input);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  const decoder = new TextDecoder();
-  return decoder.decode(bytes);
-}
-
-// 将二进制字符串转换为 Base64（编码）
-export function base64FromBinary(binaryString) {
-  const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-  let base64String = '';
-  let padding = '';
-
-  const remainder = binaryString.length % 3;
-  if (remainder > 0) {
-    padding = '='.repeat(3 - remainder);
-    binaryString += '\0'.repeat(3 - remainder);
-  }
-
-  for (let i = 0; i < binaryString.length; i += 3) {
-    const bytes = [
-      binaryString.charCodeAt(i),
-      binaryString.charCodeAt(i + 1),
-      binaryString.charCodeAt(i + 2)
-    ];
-    const base64Index1 = bytes[0] >> 2;
-    const base64Index2 = ((bytes[0] & 3) << 4) | (bytes[1] >> 4);
-    const base64Index3 = ((bytes[1] & 15) << 2) | (bytes[2] >> 6);
-    const base64Index4 = bytes[2] & 63;
-
-    base64String += base64Chars[base64Index1] +
-      base64Chars[base64Index2] +
-      base64Chars[base64Index3] +
-      base64Chars[base64Index4];
-  }
-
-  return base64String.slice(0, base64String.length - padding.length) + padding;
-}
-
-// 将 Base64 转换为二进制字符串（解码）
-export function base64ToBinary(base64String) {
-  const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-  let binaryString = '';
-  base64String = base64String.replace(/=+$/, ''); // 去掉末尾的 '='
-
-  for (let i = 0; i < base64String.length; i += 4) {
-    const bytes = [
-      base64Chars.indexOf(base64String[i]),
-      base64Chars.indexOf(base64String[i + 1]),
-      base64Chars.indexOf(base64String[i + 2]),
-      base64Chars.indexOf(base64String[i + 3])
-    ];
-    const byte1 = (bytes[0] << 2) | (bytes[1] >> 4);
-    const byte2 = ((bytes[1] & 15) << 4) | (bytes[2] >> 2);
-    const byte3 = ((bytes[2] & 3) << 6) | bytes[3];
-
-    if (bytes[1] !== -1) binaryString += String.fromCharCode(byte1);
-    if (bytes[2] !== -1) binaryString += String.fromCharCode(byte2);
-    if (bytes[3] !== -1) binaryString += String.fromCharCode(byte3);
-  }
-
-  return binaryString;
-}
-
-export function DeepCopy(obj) {
-  if (obj === null || typeof obj !== 'object') {
-    return obj;
-  }
-  if (Array.isArray(obj)) {
-    return obj.map(item => DeepCopy(item));
-  }
-  const newObj = {};
-  for (const key in obj) {
-    if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      newObj[key] = DeepCopy(obj[key]);
-    }
-  }
-  return newObj;
-}
-
-export function GenerateWebPath(length = PATH_LENGTH) {
-  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-  let result = ''
-  for (let i = 0; i < length; i++) {
-    result += characters.charAt(Math.floor(Math.random() * characters.length))
-  }
-  return result
-}
-
-export function parseServerInfo(serverInfo) {
-  let host, port;
-  if (serverInfo.startsWith('[')) {
-    const closeBracketIndex = serverInfo.indexOf(']');
-    host = serverInfo.slice(1, closeBracketIndex);
-    port = serverInfo.slice(closeBracketIndex + 2); // +2 to skip ']'
-  } else {
-    const lastColonIndex = serverInfo.lastIndexOf(':');
-    host = serverInfo.slice(0, lastColonIndex);
-    port = serverInfo.slice(lastColonIndex + 1);
-  }
-  return { host, port: parseInt(port) };
-}
-
-export function parseUrlParams(url) {
-  const [, rest] = url.split('://');
-  const [addressPart, ...remainingParts] = rest.split('?');
-  const paramsPart = remainingParts.join('?');
-
-  const [paramsOnly, ...fragmentParts] = paramsPart.split('#');
-  const searchParams = new URLSearchParams(paramsOnly);
-  const params = Object.fromEntries(searchParams.entries());
-
-  let name = fragmentParts.length > 0 ? fragmentParts.join('#') : '';
-  try {
-    name = decodeURIComponent(name);
-  } catch (error) { };
-
-  return { addressPart, params, name };
-}
-
-export function createTlsConfig(params) {
-  let tls = { enabled: false };
-  if (params.security != 'none') {
-    tls = {
-      enabled: true,
-      server_name: params.sni || params.host,
-      insecure: !!params?.allowInsecure || !!params?.insecure || !!params?.allow_insecure,
-    };
-    if (params.security === 'reality') {
-      tls.reality = {
-        enabled: true,
-        public_key: params.pbk,
-        short_id: params.sid,
-      };
-    }
-  }
-  return tls;
-}
-
-export function createTransportConfig(params) {
-  return {
-    type: params.type,
-    path: params.path ?? undefined,
-    ...(params.host && {'headers': {'host': params.host}}),
-    ...(params.type === 'grpc' && {
-      service_name: params.serviceName ?? undefined,
-    })
-  };
-}
-
-// 获取地理位置信息
+// utils.js 功能整合在同一个文件中
+// -----------------------------
+// 工具函数
 export async function getGeoInfo(ip) {
   try {
     const response = await fetch(`http://ip-api.com/json/${ip}?lang=zh-CN`);
     const data = await response.json();
 
-    if (data.status !== 'success') {
-      throw new Error(`GeoIP lookup failed for IP: ${ip}`);
-    }
+    if (!data || data.status !== 'success') throw new Error('GeoIP lookup failed');
 
-    // 如果不在中国，或者 ISP 为空，则返回国内默认信息
-    if (data.country !== 'China') {
-      return {
-        country: '中国',
-        region: '北京',
-        city: '本地',
-        isp: '本地网络',
-        emoji: '🇨🇳'
-      };
+    const country = data.country || '未知';
+    const region = data.regionName || '';
+    const city = data.city || '';
+    const isp = data.isp || '';
+    const emoji = data.countryCode
+      ? String.fromCodePoint(0x1F1E6 + data.countryCode.charCodeAt(0) - 65) +
+        String.fromCodePoint(0x1F1E6 + data.countryCode.charCodeAt(1) - 65)
+      : '';
+
+    if (country !== 'China') {
+      return { country, region, city, isp, emoji };
     }
 
     return {
-      country: data.country,      
-      region: data.regionName,    
-      city: data.city,            
-      isp: data.isp,              
-      emoji: data.countryCode ? 
-        String.fromCodePoint(0x1F1E6 + data.countryCode.charCodeAt(0) - 65) + 
-        String.fromCodePoint(0x1F1E6 + data.countryCode.charCodeAt(1) - 65) 
-        : '',
+      country: '中国',
+      region: region || '北京',
+      city: city || '本地',
+      isp: isp || '本地网络',
+      emoji: emoji || '🇨🇳',
     };
   } catch (error) {
-    console.error('GeoIP lookup failed:', error);
-    // 查询失败时返回国内默认信息
+    console.warn(`GeoIP lookup failed for IP: ${ip}`, error);
     return {
       country: '中国',
       region: '北京',
       city: '本地',
       isp: '本地网络',
-      emoji: '🇨🇳'
+      emoji: '🇨🇳',
     };
   }
 }
 
+export function parseServerInfo(serverInfo) {
+  const match = serverInfo.match(/\[([^\]]+)\]:(\d+)/);
+  if (match) return { host: match[1], port: parseInt(match[2]) };
+  const parts = serverInfo.split(':');
+  return { host: parts[0], port: parseInt(parts[1]) };
+}
+
+export function parseUrlParams(url) {
+  const [addressPart, query] = url.split('?');
+  const nameSplit = addressPart.split('#');
+  const address = nameSplit[0];
+  const name = nameSplit[1] ? decodeURIComponent(nameSplit[1]) : undefined;
+  const params = {};
+  if (query) {
+    const searchParams = new URLSearchParams(query);
+    for (const [key, value] of searchParams.entries()) {
+      params[key] = value;
+    }
+  }
+  return { addressPart: address, params, name };
+}
+
+export function createTlsConfig(params) {
+  if (params.tls === '1' || params.tls === 'true') return { enabled: true, insecure: params.insecure === '1' };
+  if (params.reality) return { reality: true, enabled: true, serverName: params.sni };
+  return { enabled: false };
+}
+
+export function createTransportConfig(params) {
+  const transport = { type: params.type };
+  if (params.path) transport.path = params.path;
+  if (params.headers) transport.headers = params.headers;
+  return transport;
+}
+
+export function decodeBase64(str) {
+  return Buffer.from(str, 'base64').toString('utf-8');
+}
+
+export function base64ToBinary(str) {
+  return Buffer.from(str, 'base64').toString('utf-8');
+}
+
+// -----------------------------
+// ProxyParser 类
+export class ProxyParser {
+  static async parse(url, userAgent) {
+    url = url.trim();
+    const type = url.split('://')[0];
+    switch (type) {
+      case 'ss': return await new ShadowsocksParser().parse(url);
+      case 'vmess': return await new VmessParser().parse(url);
+      case 'vless': return await new VlessParser().parse(url);
+      case 'hysteria':
+      case 'hysteria2':
+      case 'hy2': return await new Hysteria2Parser().parse(url);
+      case 'http':
+      case 'https': return await HttpParser.parse(url, userAgent);
+      case 'trojan': return await new TrojanParser().parse(url);
+      case 'tuic': return await new TuicParser().parse(url);
+      default: throw new Error(`Unsupported URL type: ${type}`);
+    }
+  }
+}
+
+// -----------------------------
+// ShadowsocksParser
+class ShadowsocksParser {
+  async parse(url) {
+    let [mainPart, tag] = url.replace('ss://', '').split('#');
+    if (tag && tag.includes('%')) tag = decodeURIComponent(tag);
+
+    try {
+      let [base64, serverPart] = mainPart.split('@');
+      if (!serverPart) {
+        const decodedLegacy = base64ToBinary(mainPart);
+        const [methodAndPass, serverInfo] = decodedLegacy.split('@');
+        const [method, password] = methodAndPass.split(':');
+        const [server, server_port] = this.parseServer(serverInfo);
+        const geo = await getGeoInfo(server);
+        return this.createConfig(tag, server, server_port, method, password, geo);
+      }
+
+      const decodedParts = base64ToBinary(decodeURIComponent(base64)).split(':');
+      const method = decodedParts[0];
+      const password = decodedParts.slice(1).join(':');
+      const [server, server_port] = this.parseServer(serverPart);
+      const geo = await getGeoInfo(server);
+      return this.createConfig(tag, server, server_port, method, password, geo);
+    } catch (e) {
+      console.error('Shadowsocks parse failed:', e);
+      return null;
+    }
+  }
+
+  parseServer(serverPart) {
+    const match = serverPart.match(/\[([^\]]+)\]:(\d+)/);
+    return match ? [match[1], match[2]] : serverPart.split(':');
+  }
+
+  createConfig(tag, server, server_port, method, password, geo) {
+    return { tag: tag || 'Shadowsocks', type: 'shadowsocks', server, server_port: parseInt(server_port), method, password, network: 'tcp', tcp_fast_open: false, geo };
+  }
+}
+
+// -----------------------------
+// VmessParser
+class VmessParser {
+  async parse(url) {
+    const base64 = url.replace('vmess://', '');
+    const vmessConfig = JSON.parse(decodeBase64(base64));
+    let tls = { enabled: false };
+    let transport = {};
+
+    if (vmessConfig.net === 'ws') {
+      transport = { type: 'ws', path: vmessConfig.path, headers: { Host: vmessConfig.host || vmessConfig.sni } };
+      if (vmessConfig.tls) tls = { enabled: true, server_name: vmessConfig.sni, insecure: vmessConfig['skip-cert-verify'] || false };
+    }
+
+    const geo = await getGeoInfo(vmessConfig.add);
+    return { tag: vmessConfig.ps, type: 'vmess', server: vmessConfig.add, server_port: parseInt(vmessConfig.port), uuid: vmessConfig.id, alter_id: parseInt(vmessConfig.aid), security: vmessConfig.scy || 'auto', network: 'tcp', tcp_fast_open: false, transport, tls: tls.enabled ? tls : undefined, geo };
+  }
+}
+
+// -----------------------------
+// VlessParser
+class VlessParser {
+  async parse(url) {
+    const { addressPart, params, name } = parseUrlParams(url);
+    const [uuid, serverInfo] = addressPart.split('@');
+    const { host, port } = parseServerInfo(serverInfo);
+    const tls = createTlsConfig(params);
+    if (tls.reality) tls.utls = { enabled: true, fingerprint: 'chrome' };
+    const transport = params.type !== 'tcp' ? createTransportConfig(params) : undefined;
+    const geo = await getGeoInfo(host);
+    return { type: 'vless', tag: name, server: host, server_port: port, uuid: decodeURIComponent(uuid), tcp_fast_open: false, tls, transport, network: 'tcp', flow: params.flow ?? undefined, geo };
+  }
+}
+
+// -----------------------------
+// Hysteria2Parser
+class Hysteria2Parser {
+  async parse(url) {
+    const { addressPart, params, name } = parseUrlParams(url);
+    let host, port, password = null;
+
+    if (addressPart.includes('@')) {
+      const [uuid, serverInfo] = addressPart.split('@');
+      const parsed = parseServerInfo(serverInfo);
+      host = parsed.host; port = parsed.port; password = decodeURIComponent(uuid);
+    } else {
+      const parsed = parseServerInfo(addressPart);
+      host = parsed.host; port = parsed.port; password = params.auth;
+    }
+
+    const tls = createTlsConfig(params);
+    const obfs = {};
+    if (params['obfs-password']) { obfs.type = params.obfs; obfs.password = params['obfs-password']; }
+    const geo = await getGeoInfo(host);
+
+    return { tag: name, type: 'hysteria2', server: host, server_port: port, password, tls, obfs, auth: params.auth, recv_window_conn: params.recv_window_conn, up_mbps: params?.upmbps ? parseInt(params.upmbps) : undefined, down_mbps: params?.downmbps ? parseInt(params.downmbps) : undefined, geo };
+  }
+}
+
+// -----------------------------
+// TrojanParser
+class TrojanParser {
+  async parse(url) {
+    const { addressPart, params, name } = parseUrlParams(url);
+    const [password, serverInfo] = addressPart.split('@');
+    const { host, port } = parseServerInfo(serverInfo);
+    const tls = createTlsConfig(params);
+    const transport = params.type !== 'tcp' ? createTransportConfig(params) : undefined;
+    const geo = await getGeoInfo(host);
+    return { type: 'trojan', tag: name, server: host, server_port: port, password: decodeURIComponent(password), network: 'tcp', tcp_fast_open: false, tls, transport, flow: params.flow ?? undefined, geo };
+  }
+}
+
+// -----------------------------
+// TuicParser
+class TuicParser {
+  async parse(url) {
+    const { addressPart, params, name } = parseUrlParams(url);
+    const [userinfo, serverInfo] = addressPart.split('@');
+    const { host, port } = parseServerInfo(serverInfo);
+    const tls = { enabled: true, server_name: params.sni, alpn: params.alpn ? decodeURIComponent(params.alpn).split(',') : [], insecure: true };
+    const geo = await getGeoInfo(host);
+    return { tag: name, type: 'tuic', server: host, server_port: port, uuid: decodeURIComponent(userinfo).split(':')[0], password: decodeURIComponent(userinfo).split(':')[1], congestion_control: params.congestion_control, tls, flow: params.flow ?? undefined, geo };
+  }
+}
+
+// -----------------------------
+// HttpParser
+class HttpParser {
+  static async parse(url, userAgent) {
+    try {
+      const headers = new Headers({ 'User-Agent': userAgent });
+      const response = await fetch(url, { method: 'GET', headers });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      let text = await response.text();
+      let decodedText;
+      try { decodedText = decodeBase64(text.trim()); if (decodedText.includes('%')) decodedText = decodeURIComponent(decodedText); }
+      catch { decodedText = text; if (decodedText.includes('%')) { try { decodedText = decodeURIComponent(decodedText); } catch {} } }
+      return decodedText.split('\n').filter(line => line.trim() !== '');
+    } catch (error) { console.error('HTTP parse failed:', error); return null; }
+  }
+}
