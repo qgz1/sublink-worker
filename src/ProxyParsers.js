@@ -1,4 +1,3 @@
-// ProxyParsers.js
 import { getGeoInfo, decodeBase64, base64ToBinary, parseServerInfo, parseUrlParams, createTlsConfig, createTransportConfig } from './utils.js';
 
 export class ProxyParser {
@@ -21,7 +20,7 @@ export class ProxyParser {
   }
 }
 
-// Shadowsocks
+// ===== Shadowsocks =====
 class ShadowsocksParser {
   async parse(url) {
     let [mainPart, tag] = url.replace('ss://', '').split('#');
@@ -60,7 +59,7 @@ class ShadowsocksParser {
   }
 }
 
-// Vmess
+// ===== Vmess =====
 class VmessParser {
   async parse(url) {
     const base64 = url.replace('vmess://', '');
@@ -78,21 +77,20 @@ class VmessParser {
   }
 }
 
-// Vless
+// ===== Vless =====
 class VlessParser {
   async parse(url) {
     const { addressPart, params, name } = parseUrlParams(url);
     const [uuid, serverInfo] = addressPart.split('@');
     const { host, port } = parseServerInfo(serverInfo);
     const tls = createTlsConfig(params);
-    if (tls.reality) tls.utls = { enabled: true, fingerprint: 'chrome' };
     const transport = params.type !== 'tcp' ? createTransportConfig(params) : undefined;
     const geo = await getGeoInfo(host);
     return { type: 'vless', tag: name, server: host, server_port: port, uuid: decodeURIComponent(uuid), tcp_fast_open: false, tls, transport, network: 'tcp', flow: params.flow ?? undefined, geo };
   }
 }
 
-// Hysteria2
+// ===== Hysteria2 =====
 class Hysteria2Parser {
   async parse(url) {
     const { addressPart, params, name } = parseUrlParams(url);
@@ -116,7 +114,7 @@ class Hysteria2Parser {
   }
 }
 
-// Trojan
+// ===== Trojan =====
 class TrojanParser {
   async parse(url) {
     const { addressPart, params, name } = parseUrlParams(url);
@@ -129,9 +127,31 @@ class TrojanParser {
   }
 }
 
-// Tuic
+// ===== Tuic =====
 class TuicParser {
   async parse(url) {
     const { addressPart, params, name } = parseUrlParams(url);
     const [userinfo, serverInfo] = addressPart.split('@');
-    const { host, port } = parse
+    const { host, port } = parseServerInfo(serverInfo);
+    const [uuid, password] = userinfo.split(':').map(decodeURIComponent);
+    const tls = { enabled: true, server_name: params.sni, alpn: params.alpn ? decodeURIComponent(params.alpn).split(',') : [], insecure: true };
+    const geo = await getGeoInfo(host);
+    return { tag: name, type: 'tuic', server: host, server_port: port, uuid, password, congestion_control: params.congestion_control, tls, flow: params.flow ?? undefined, geo };
+  }
+}
+
+// ===== Http =====
+class HttpParser {
+  static async parse(url, userAgent) {
+    try {
+      const headers = new Headers({ 'User-Agent': userAgent });
+      const response = await fetch(url, { method: 'GET', headers });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      let text = await response.text();
+      let decodedText;
+      try { decodedText = decodeBase64(text.trim()); if (decodedText.includes('%')) decodedText = decodeURIComponent(decodedText); }
+      catch { decodedText = text; if (decodedText.includes('%')) { try { decodedText = decodeURIComponent(decodedText); } catch {} } }
+      return decodedText.split('\n').filter(line => line.trim() !== '');
+    } catch (error) { console.error('HTTP parse failed:', error); return null; }
+  }
+}
