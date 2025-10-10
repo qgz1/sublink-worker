@@ -1,5 +1,6 @@
 import { t } from './i18n';
 
+/** 基础规则集 URL */
 export const SITE_RULE_SET_BASE_URL = 'https://gh-proxy.com/https://raw.githubusercontent.com/lyc8503/sing-box-rules/refs/heads/rule-set-geosite/';
 export const IP_RULE_SET_BASE_URL = 'https://gh-proxy.com/https://raw.githubusercontent.com/lyc8503/sing-box-rules/refs/heads/rule-set-geoip/';
 export const CLASH_SITE_RULE_SET_BASE_URL = 'https://gh-proxy.com/https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/';
@@ -7,8 +8,10 @@ export const CLASH_IP_RULE_SET_BASE_URL = 'https://gh-proxy.com/https://github.c
 export const SURGE_SITE_RULE_SET_BASEURL = 'https://gh-proxy.com/https://github.com/NSZA156/surge-geox-rules/raw/refs/heads/release/geo/geosite/';
 export const SURGE_IP_RULE_SET_BASEURL = 'https://gh-proxy.com/https://github.com/NSZA156/surge-geox-rules/raw/refs/heads/release/geo/geoip/';
 
+/** 自定义规则 */
 export const CUSTOM_RULES = [];
 
+/** 统一规则定义 */
 export const UNIFIED_RULES = [
     { name: 'Ad Block', outbound: t('outboundNames.Ad Block'), site_rules: ['category-ads-all'], ip_rules: [] },
     { name: 'AI Services', outbound: t('outboundNames.AI Services'), site_rules: ['category-ai-!cn'], ip_rules: [] },
@@ -30,37 +33,38 @@ export const UNIFIED_RULES = [
     { name: 'Non-China', outbound: t('outboundNames.Non-China'), site_rules: ['geolocation-!cn'], ip_rules: [] }
 ];
 
+/** 预定义规则集 */
 export const PREDEFINED_RULE_SETS = {
     minimal: ['Location:CN', 'Private', 'Non-China'],
     balanced: ['Location:CN', 'Private', 'Non-China','Github','Google','Youtube','AI Services','Telegram'],
     comprehensive: UNIFIED_RULES.map(rule => rule.name)
 };
 
+/** 映射生成 Site/IP 规则 */
 export const SITE_RULE_SETS = UNIFIED_RULES.reduce((acc, rule) => {
     rule.site_rules.forEach(site_rule => acc[site_rule] = `geosite-${site_rule}.srs`);
     return acc;
 }, {});
-
 export const IP_RULE_SETS = UNIFIED_RULES.reduce((acc, rule) => {
     rule.ip_rules.forEach(ip_rule => acc[ip_rule] = `geoip-${ip_rule}.srs`);
     return acc;
 }, {});
-
 export const CLASH_SITE_RULE_SETS = UNIFIED_RULES.reduce((acc, rule) => {
     rule.site_rules.forEach(site_rule => acc[site_rule] = `${site_rule}.mrs`);
     return acc;
 }, {});
-
 export const CLASH_IP_RULE_SETS = UNIFIED_RULES.reduce((acc, rule) => {
     rule.ip_rules.forEach(ip_rule => acc[ip_rule] = `${ip_rule}.mrs`);
     return acc;
 }, {});
 
+/** 获取已选择的 outbound 列表 */
 export function getOutbounds(selectedRuleNames) {
     if (!selectedRuleNames || !Array.isArray(selectedRuleNames)) return [];
     return UNIFIED_RULES.filter(rule => selectedRuleNames.includes(rule.name)).map(rule => rule.name);
 }
 
+/** 生成 Singbox 风格规则 */
 export function generateRules(selectedRules = [], customRules = []) {
     if (typeof selectedRules === 'string' && PREDEFINED_RULE_SETS[selectedRules]) selectedRules = PREDEFINED_RULE_SETS[selectedRules];
     if (!selectedRules || selectedRules.length === 0) selectedRules = PREDEFINED_RULE_SETS.minimal;
@@ -68,11 +72,7 @@ export function generateRules(selectedRules = [], customRules = []) {
     const rules = [];
     UNIFIED_RULES.forEach(rule => {
         if (selectedRules.includes(rule.name)) {
-            rules.push({
-                site_rules: rule.site_rules,
-                ip_rules: rule.ip_rules,
-                outbound: rule.name
-            });
+            rules.push({ site_rules: rule.site_rules, ip_rules: rule.ip_rules, outbound: rule.name });
         }
     });
 
@@ -91,6 +91,7 @@ export function generateRules(selectedRules = [], customRules = []) {
     return rules;
 }
 
+/** 生成 Singbox 风格规则集 */
 export function generateRuleSets(selectedRules = [], customRules = []) {
     if (typeof selectedRules === 'string' && PREDEFINED_RULE_SETS[selectedRules]) selectedRules = PREDEFINED_RULE_SETS[selectedRules];
     if (!selectedRules || selectedRules.length === 0) selectedRules = PREDEFINED_RULE_SETS.minimal;
@@ -149,6 +150,7 @@ export function generateRuleSets(selectedRules = [], customRules = []) {
     return { site_rule_sets, ip_rule_sets };
 }
 
+/** 生成 Clash 风格规则集 */
 export function generateClashRuleSets(selectedRules = [], customRules = []) {
     if (typeof selectedRules === 'string' && PREDEFINED_RULE_SETS[selectedRules]) selectedRules = PREDEFINED_RULE_SETS[selectedRules];
     if (!selectedRules || selectedRules.length === 0) selectedRules = PREDEFINED_RULE_SETS.minimal;
@@ -191,3 +193,13 @@ export function generateClashRuleSets(selectedRules = [], customRules = []) {
 
     return { site_rule_providers, ip_rule_providers };
 }
+
+/** Surge 风格规则集 */
+export const SURGE_CONFIG = UNIFIED_RULES.map(rule => ({
+    name: rule.name,
+    outbound: rule.outbound,
+    site_rules: rule.site_rules,
+    ip_rules: rule.ip_rules,
+    site_rule_base: SURGE_SITE_RULE_SET_BASEURL,
+    ip_rule_base: SURGE_IP_RULE_SET_BASEURL
+}));
