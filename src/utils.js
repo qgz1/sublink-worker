@@ -178,22 +178,44 @@ export function createTransportConfig(params) {
 // 获取地理位置信息
 export async function getGeoInfo(ip) {
   try {
-    const response = await fetch(`http://ip-api.com/json/${ip}`);
+    const response = await fetch(`http://ip-api.com/json/${ip}?lang=zh-CN`);
     const data = await response.json();
 
-    if (data.status === 'fail') {
+    if (data.status !== 'success') {
       throw new Error(`GeoIP lookup failed for IP: ${ip}`);
     }
 
+    // 如果不在中国，或者 ISP 为空，则返回国内默认信息
+    if (data.country !== 'China') {
+      return {
+        country: '中国',
+        region: '北京',
+        city: '本地',
+        isp: '本地网络',
+        emoji: '🇨🇳'
+      };
+    }
+
     return {
-      country: data.country,      // 国家
-      region: data.regionName,    // 区域
-      city: data.city,            // 城市
-      isp: data.isp,              // ISP
-      emoji: data.countryCode ? String.fromCodePoint(0x1F1E8 + data.countryCode.charCodeAt(0) - 65) + String.fromCodePoint(0x1F1F3 + data.countryCode.charCodeAt(1) - 65) : '', // 国家表情
+      country: data.country,      
+      region: data.regionName,    
+      city: data.city,            
+      isp: data.isp,              
+      emoji: data.countryCode ? 
+        String.fromCodePoint(0x1F1E6 + data.countryCode.charCodeAt(0) - 65) + 
+        String.fromCodePoint(0x1F1E6 + data.countryCode.charCodeAt(1) - 65) 
+        : '',
     };
   } catch (error) {
     console.error('GeoIP lookup failed:', error);
-    return {};  // 如果出错则返回一个空对象
+    // 查询失败时返回国内默认信息
+    return {
+      country: '中国',
+      region: '北京',
+      city: '本地',
+      isp: '本地网络',
+      emoji: '🇨🇳'
+    };
   }
 }
+
