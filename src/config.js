@@ -90,6 +90,8 @@ export function generateRules(selectedRules = [], customRules = []) {
       rules.push({
         site_rules: rule.site_rules,
         ip_rules: rule.ip_rules,
+        domain_suffix: rule?.domain_suffix,
+        ip_cidr: rule?.ip_cidr,
         outbound: rule.name
       });
     }
@@ -110,6 +112,40 @@ export function generateRules(selectedRules = [], customRules = []) {
   }
 
   return rules;
+}
+
+// ================================
+// Generate Singbox rule sets
+// ================================
+export function generateRuleSets(selectedRules = [], customRules = []) {
+  return generateRules(selectedRules, customRules).map(rule => ({
+    outbound: rule.outbound,
+    site_rules: rule.site_rules,
+    ip_rules: rule.ip_rules,
+    domain_suffix: rule.domain_suffix || [],
+    domain_keyword: rule.domain_keyword || [],
+    ip_cidr: rule.ip_cidr || [],
+    protocol: rule.protocol || []
+  }));
+}
+
+// ================================
+// Generate Clash rule sets
+// ================================
+export function generateClashRuleSets(selectedRules = [], customRules = []) {
+  const rules = generateRules(selectedRules, customRules);
+  const clashRules = {};
+
+  rules.forEach(rule => {
+    rule.site_rules.forEach(site => {
+      clashRules[site] = `${site}.mrs`;
+    });
+    rule.ip_rules.forEach(ip => {
+      clashRules[ip] = `${ip}.mrs`;
+    });
+  });
+
+  return clashRules;
 }
 
 // ================================
@@ -172,44 +208,4 @@ export const CLASH_CONFIG = {
   'rule-providers': {},
   'dns': {
     enable: true,
-    ipv6: true,
-    'respect-rules': true,
-    'enhanced-mode': 'fake-ip',
-    nameserver: ['https://120.53.53.53/dns-query','https://223.5.5.5/dns-query'],
-    'proxy-server-nameserver': ['https://120.53.53.53/dns-query','https://223.5.5.5/dns-query'],
-    'nameserver-policy': {
-      'geosite:cn,private': ['https://120.53.53.53/dns-query','https://223.5.5.5/dns-query'],
-      'geosite:geolocation-!cn': ['https://dns.cloudflare.com/dns-query','https://dns.google/dns-query']
-    }
-  },
-  proxies: [],
-  'proxy-groups': []
-};
-
-// ================================
-// Surge configuration
-// ================================
-export const SURGE_CONFIG = {
-  general: {
-    'allow-wifi-access': false,
-    'wifi-access-http-port': 6152,
-    'wifi-access-socks5-port': 6153,
-    'http-listen': '127.0.0.1:6152',
-    'socks5-listen': '127.0.0.1:6153',
-    'allow-hotspot-access': false,
-    'skip-proxy': '127.0.0.1,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,100.64.0.0/10,17.0.0.0/8,localhost,*.local',
-    'test-timeout': 5,
-    'proxy-test-url': 'http://cp.cloudflare.com/generate_204',
-    'internet-test-url': 'http://www.apple.com/library/test/success.html',
-    'geoip-maxmind-url': 'https://raw.githubusercontent.com/Loyalsoldier/geoip/release/Country.mmdb',
-    'ipv6': false,
-    'show-error-page-for-reject': true,
-    'dns-server': '119.29.29.29, 180.184.1.1, 223.5.5.5, system',
-    'encrypted-dns-server': 'https://223.5.5.5/dns-query',
-    'exclude-simple-hostnames': true,
-    'read-etc-hosts': true,
-    'always-real-ip': true
-  },
-  proxies: [],
-  rules: []
-};
+    ipv
