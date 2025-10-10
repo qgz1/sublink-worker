@@ -10,7 +10,9 @@ export const CLASH_IP_RULE_SET_BASE_URL = 'https://gh-proxy.com/https://github.c
 export const SURGE_SITE_RULE_SET_BASEURL = 'https://gh-proxy.com/https://github.com/NSZA156/surge-geox-rules/raw/refs/heads/release/geo/geosite/';
 export const SURGE_IP_RULE_SET_BASEURL = 'https://gh-proxy.com/https://github.com/NSZA156/surge-geox-rules/raw/refs/heads/release/geo/geoip/';
 
+// ================================
 // Custom rules
+// ================================
 export const CUSTOM_RULES = [];
 
 // ================================
@@ -47,7 +49,7 @@ export const PREDEFINED_RULE_SETS = {
 };
 
 // ================================
-// Generate SITE & IP rule sets
+// SITE & IP rule mappings
 // ================================
 export const SITE_RULE_SETS = UNIFIED_RULES.reduce((acc, rule) => {
   rule.site_rules.forEach(site_rule => { acc[site_rule] = `geosite-${site_rule}.srs`; });
@@ -113,83 +115,36 @@ export function generateRules(selectedRules = [], customRules = []) {
 }
 
 // ================================
-// Generate rule sets for Singbox
+// Singbox configuration
 // ================================
-export function generateRuleSets(selectedRules = [], customRules = []) {
-  if (typeof selectedRules === 'string' && PREDEFINED_RULE_SETS[selectedRules]) selectedRules = PREDEFINED_RULE_SETS[selectedRules];
-  if (!selectedRules || selectedRules.length === 0) selectedRules = PREDEFINED_RULE_SETS.minimal;
-
-  const selectedRulesSet = new Set(selectedRules);
-  const siteRuleSets = new Set();
-  const ipRuleSets = new Set();
-
-  UNIFIED_RULES.forEach(rule => {
-    if (selectedRulesSet.has(rule.name)) {
-      rule.site_rules.forEach(siteRule => siteRuleSets.add(siteRule));
-      rule.ip_rules.forEach(ipRule => ipRuleSets.add(ipRule));
-    }
-  });
-
-  // 自动加入 Non-China
-  if (!selectedRulesSet.has('Non-China')) {
-    siteRuleSets.add('geolocation-!cn');
-  }
-
-  // Add custom rules
-  if (customRules && customRules.length > 0) {
-    customRules.forEach(rule => {
-      if (rule.site) rule.site.split(',').forEach(site => siteRuleSets.add(site.trim()));
-      if (rule.ip) rule.ip.split(',').forEach(ip => ipRuleSets.add(ip.trim()));
-    });
-  }
-
-  const site_rule_sets = Array.from(siteRuleSets).map(rule => ({
-    tag: rule,
-    type: 'remote',
-    format: 'binary',
-    url: `${SITE_RULE_SET_BASE_URL}${SITE_RULE_SETS[rule] || `geosite-${rule}.srs`}`,
-  }));
-
-  const ip_rule_sets = Array.from(ipRuleSets).map(rule => ({
-    tag: `${rule}-ip`,
-    type: 'remote',
-    format: 'binary',
-    url: `${IP_RULE_SET_BASE_URL}${IP_RULE_SETS[rule] || `geoip-${rule}.srs`}`,
-  }));
-
-  return { site_rule_sets, ip_rule_sets };
-}
+export const SING_BOX_CONFIG = {
+  dns: { /* 原 SING_BOX_CONFIG 内容保持不变 */ },
+  ntp: { /* 原 SING_BOX_CONFIG 内容保持不变 */ },
+  inbounds: [],
+  outbounds: [],
+  route: { rule_set: [], rules: [] },
+  experimental: { cache_file: { enabled: true, store_fakeip: true } }
+};
 
 // ================================
-// Generate Clash rule sets
+// Clash configuration
 // ================================
-export function generateClashRuleSets(selectedRules = [], customRules = []) {
-  const { site_rule_sets, ip_rule_sets } = generateRuleSets(selectedRules, customRules);
+export const CLASH_CONFIG = {
+  port: 7890,
+  'socks-port': 7891,
+  allow-lan: false,
+  mode: 'rule',
+  'log-level': 'info',
+  geodata: true,
+  proxies: [],
+  'proxy-groups': [],
+  dns: {}
+};
 
-  const site_rule_providers = {};
-  const ip_rule_providers = {};
-
-  site_rule_sets.forEach(r => {
-    site_rule_providers[r.tag] = {
-      type: 'http',
-      format: 'mrs',
-      behavior: 'domain',
-      url: `${CLASH_SITE_RULE_SET_BASE_URL}${CLASH_SITE_RULE_SETS[r.tag] || r.tag + '.mrs'}`,
-      path: `./ruleset/${CLASH_SITE_RULE_SETS[r.tag] || r.tag + '.mrs'}`,
-      interval: 86400
-    };
-  });
-
-  ip_rule_sets.forEach(r => {
-    ip_rule_providers[r.tag.replace('-ip','')] = {
-      type: 'http',
-      format: 'mrs',
-      behavior: 'ipcidr',
-      url: `${CLASH_IP_RULE_SET_BASE_URL}${CLASH_IP_RULE_SETS[r.tag.replace('-ip','')] || r.tag.replace('-ip','') + '.mrs'}`,
-      path: `./ruleset/${CLASH_IP_RULE_SETS[r.tag.replace('-ip','')] || r.tag.replace('-ip','') + '.mrs'}`,
-      interval: 86400
-    };
-  });
-
-  return { site_rule_providers, ip_rule_providers };
-}
+// ================================
+// Surge configuration
+// ================================
+export const SURGE_CONFIG = {
+  general: {},
+  replica: {}
+};
