@@ -56,7 +56,6 @@ export const CLASH_IP_RULE_SETS = UNIFIED_RULES.reduce((acc, rule) => {
     return acc;
 }, {});
 
-// Helper functions
 export function getOutbounds(selectedRuleNames) {
     if (!selectedRuleNames || !Array.isArray(selectedRuleNames)) return [];
     return UNIFIED_RULES.filter(rule => selectedRuleNames.includes(rule.name)).map(rule => rule.name);
@@ -72,8 +71,6 @@ export function generateRules(selectedRules = [], customRules = []) {
             rules.push({
                 site_rules: rule.site_rules,
                 ip_rules: rule.ip_rules,
-                domain_suffix: rule?.domain_suffix,
-                ip_cidr: rule?.ip_cidr,
                 outbound: rule.name
             });
         }
@@ -81,12 +78,12 @@ export function generateRules(selectedRules = [], customRules = []) {
 
     customRules.reverse().forEach(rule => {
         rules.unshift({
-            site_rules: rule.site.split(','),
-            ip_rules: rule.ip.split(','),
-            domain_suffix: rule.domain_suffix ? rule.domain_suffix.split(',') : [],
-            domain_keyword: rule.domain_keyword ? rule.domain_keyword.split(',') : [],
-            ip_cidr: rule.ip_cidr ? rule.ip_cidr.split(',') : [],
-            protocol: rule.protocol ? rule.protocol.split(',') : [],
+            site_rules: rule.site?.split(',') || [],
+            ip_rules: rule.ip?.split(',') || [],
+            domain_suffix: rule.domain_suffix?.split(',') || [],
+            domain_keyword: rule.domain_keyword?.split(',') || [],
+            ip_cidr: rule.ip_cidr?.split(',') || [],
+            protocol: rule.protocol?.split(',') || [],
             outbound: rule.name
         });
     });
@@ -134,13 +131,13 @@ export function generateRuleSets(selectedRules = [], customRules = []) {
 
     if(customRules){
         customRules.forEach(rule => {
-            if(rule.site) rule.site.split(',').forEach(site => site_rule_sets.push({
+            rule.site?.split(',').forEach(site => site_rule_sets.push({
                 tag: site.trim(),
                 type: 'remote',
                 format: 'binary',
                 url: `${SITE_RULE_SET_BASE_URL}geosite-${site.trim()}.srs`
             }));
-            if(rule.ip) rule.ip.split(',').forEach(ip => ip_rule_sets.push({
+            rule.ip?.split(',').forEach(ip => ip_rule_sets.push({
                 tag: `${ip.trim()}-ip`,
                 type: 'remote',
                 format: 'binary',
@@ -181,4 +178,16 @@ export function generateClashRuleSets(selectedRules = [], customRules = []) {
         };
     });
 
-    Array.from(ipRuleSets
+    Array.from(ipRuleSets).forEach(rule => {
+        ip_rule_providers[rule] = {
+            type: 'http',
+            format: 'mrs',
+            behavior: 'ipcidr',
+            url: `${CLASH_IP_RULE_SET_BASE_URL}${CLASH_IP_RULE_SETS[rule]}`,
+            path: `./ruleset/${CLASH_IP_RULE_SETS[rule]}`,
+            interval: 86400
+        };
+    });
+
+    return { site_rule_providers, ip_rule_providers };
+}
