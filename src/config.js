@@ -118,11 +118,37 @@ export function generateRules(selectedRules = [], customRules = []) {
 // Singbox configuration
 // ================================
 export const SING_BOX_CONFIG = {
-  dns: { /* 原 SING_BOX_CONFIG 内容保持不变 */ },
-  ntp: { /* 原 SING_BOX_CONFIG 内容保持不变 */ },
-  inbounds: [],
-  outbounds: [],
-  route: { rule_set: [], rules: [] },
+  dns: {
+    servers: [
+      { type: "tcp", tag: "dns_proxy", server: "1.1.1.1", detour: "🚀 节点选择", domain_resolver: "dns_resolver" },
+      { type: "https", tag: "dns_direct", server: "dns.alidns.com", domain_resolver: "dns_resolver" },
+      { type: "udp", tag: "dns_resolver", server: "223.5.5.5" },
+      { type: "fakeip", tag: "dns_fakeip", inet4_range: "198.18.0.0/15", inet6_range: "fc00::/18" }
+    ],
+    rules: [
+      { rule_set: "geolocation-!cn", query_type: ["A","AAAA"], server: "dns_fakeip" },
+      { rule_set: "geolocation-!cn", query_type: "CNAME", server: "dns_proxy" },
+      { query_type: ["A","AAAA","CNAME"], invert: true, action: "predefined", rcode: "REFUSED" }
+    ],
+    final: "dns_direct",
+    independent_cache: true
+  },
+  ntp: { enabled: true, server: 'time.apple.com', server_port: 123, interval: '30m' },
+  inbounds: [
+    { type: 'mixed', tag: 'mixed-in', listen: '0.0.0.0', listen_port: 2080 },
+    { type: 'tun', tag: 'tun-in', address: '172.19.0.1/30', auto_route: true, strict_route: true, stack: 'mixed', sniff: true }
+  ],
+  outbounds: [
+    { type: 'block', tag: 'REJECT' },
+    { type: "direct", tag: 'DIRECT' }
+  ],
+  route: {
+    default_domain_resolver: "dns_resolver",
+    rule_set: [
+      { tag: "geosite-geolocation-!cn", type: "local", format: "binary", path: "geosite-geolocation-!cn.srs" }
+    ],
+    rules: []
+  },
   experimental: { cache_file: { enabled: true, store_fakeip: true } }
 };
 
@@ -132,19 +158,56 @@ export const SING_BOX_CONFIG = {
 export const CLASH_CONFIG = {
   port: 7890,
   'socks-port': 7891,
-  allow-lan: false,
+  'allow-lan': false,
   mode: 'rule',
   'log-level': 'info',
-  geodata: true,
+  'geodata-mode': true,
+  'geo-auto-update': true,
+  'geodata-loader': 'standard',
+  'geo-update-interval': 24,
+  'geox-url': {
+    'geoip': "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat",
+    'geosite': "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat",
+    'mmdb': "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/country.mmdb",
+    'asn': "https://github.com/xishang0128/geoip/releases/download/latest/GeoLite2-ASN.mmdb"
+  },
+  'rule-providers': {},
+  'dns': {
+    enable: true,
+    ipv6: true,
+    'respect-rules': true,
+    'enhanced-mode': 'fake-ip',
+    nameserver: ['https://120.53.53.53/dns-query','https://223.5.5.5/dns-query'],
+    'proxy-server-nameserver': ['https://120.53.53.53/dns-query','https://223.5.5.5/dns-query'],
+    'nameserver-policy': {
+      'geosite:cn,private': ['https://120.53.53.53/dns-query','https://223.5.5.5/dns-query'],
+      'geosite:geolocation-!cn': ['https://dns.cloudflare.com/dns-query','https://dns.google/dns-query']
+    }
+  },
   proxies: [],
-  'proxy-groups': [],
-  dns: {}
+  'proxy-groups': []
 };
 
 // ================================
 // Surge configuration
 // ================================
 export const SURGE_CONFIG = {
-  general: {},
-  replica: {}
-};
+  general: {
+    'allow-wifi-access': false,
+    'wifi-access-http-port': 6152,
+    'wifi-access-socks5-port': 6153,
+    'http-listen': '127.0.0.1:6152',
+    'socks5-listen': '127.0.0.1:6153',
+    'allow-hotspot-access': false,
+    'skip-proxy': '127.0.0.1,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,100.64.0.0/10,17.0.0.0/8,localhost,*.local',
+    'test-timeout': 5,
+    'proxy-test-url': 'http://cp.cloudflare.com/generate_204',
+    'internet-test-url': 'http://www.apple.com/library/test/success.html',
+    'geoip-maxmind-url': 'https://raw.githubusercontent.com/Loyalsoldier/geoip/release/Country.mmdb',
+    'ipv6': false,
+    'show-error-page-for-reject': true,
+    'dns-server': '119.29.29.29, 180.184.1.1, 223.5.5.5, system',
+    'encrypted-dns-server': 'https://223.5.5.5/dns-query',
+    'exclude-simple-hostnames': true,
+    'read-etc-hosts': true,
+    'always-real-ip
