@@ -485,12 +485,17 @@ export function generateClashRuleSets(selectedRules = [], customRules = []) {
   };
 }
 
-// 节点配置
+// 节点配置 - 保持你要求的显示顺序
 export const PROXY_NODES = [
   {
-    name: '⚡ 自动选择',
-    type: 'url-test',
-    tag: 'auto-select'
+    name: '🚀 节点选择',
+    type: 'select',
+    tag: 'node-selector'
+  },
+  {
+    name: 'Selector',
+    type: 'select', 
+    tag: 'selector'
   },
   {
     name: 'DIRECT',
@@ -501,6 +506,11 @@ export const PROXY_NODES = [
     name: 'REJECT',
     type: 'block',
     tag: 'REJECT'
+  },
+  {
+    name: '⚡ 自动选择',
+    type: 'url-test',
+    tag: 'auto-select'
   }
 ];
 
@@ -514,38 +524,55 @@ export const CUSTOM_DOMAINS = [
   'cdn.tzpro.xyz',
   'bestcf.top',
   'cf.090227.xyz',
-  'cf.zhetengsha.eu.or'
+  'cf.zhetengsha.eu.org'
 ];
 
 /**
- * 生成完整的 Clash 配置
+ * 生成完整的 Clash 配置 - 自动选择节点
  */
 export function generateClashConfig(selectedRules = [], customRules = [], proxies = []) {
   const ruleProviders = generateClashRuleSets(selectedRules, customRules);
   
+  // 创建代理组配置
+  const proxyGroups = [
+    // 主选择组 - 默认使用自动选择
+    {
+      name: '🚀 节点选择',
+      type: 'select',
+      // 将"⚡ 自动选择"放在第一位，作为默认选项
+      proxies: [
+        '⚡ 自动选择',  // 默认自动选择
+        'Selector',
+        'DIRECT',
+        'REJECT',
+        ...proxies.map(p => p.name)
+      ]
+    },
+    // 自动选择组 - 自动测试并选择最快的节点
+    {
+      name: '⚡ 自动选择',
+      type: 'url-test',
+      proxies: proxies.map(p => p.name),
+      url: 'http://www.gstatic.com/generate_204',
+      interval: 300
+    },
+    // 选择器组 - 提供手动选择选项
+    {
+      name: 'Selector',
+      type: 'select',
+      proxies: [
+        '⚡ 自动选择',
+        'DIRECT',
+        'REJECT',
+        ...proxies.map(p => p.name)
+      ]
+    }
+  ];
+
   const config = {
     ...CLASH_CONFIG,
     proxies: [...proxies],
-    'proxy-groups': [
-      {
-        name: '🚀 节点选择',
-        type: 'select',
-        // 修改顺序：⚡ 自动选择 在 DIRECT 和 REJECT 之前
-        proxies: [
-          '⚡ 自动选择',
-          'DIRECT', 
-          'REJECT',
-          ...proxies.map(p => p.name)
-        ]
-      },
-      {
-        name: '⚡ 自动选择',
-        type: 'url-test',
-        proxies: proxies.map(p => p.name),
-        url: 'http://www.gstatic.com/generate_204',
-        interval: 300
-      }
-    ],
+    'proxy-groups': proxyGroups,
     'rule-providers': ruleProviders.site_rule_providers
   };
 
@@ -557,12 +584,13 @@ export function generateClashConfig(selectedRules = [], customRules = [], proxie
     };
   }
 
-  // 生成规则
+  // 生成规则 - 默认路由到自动选择
   const rules = [
-    // 自定义域名规则
+    // 自定义域名规则 - 自动使用最快的节点
     ...CUSTOM_DOMAINS.map(domain => `DOMAIN,${domain},🚀 节点选择`),
-    // 其他规则
+    // 国内流量直连
     'GEOIP,CN,DIRECT',
+    // 最终规则 - 自动选择节点
     'MATCH,🚀 节点选择'
   ];
 
@@ -572,7 +600,7 @@ export function generateClashConfig(selectedRules = [], customRules = [], proxie
 }
 
 /**
- * 生成完整的 Sing-box 配置
+ * 生成完整的 Sing-box 配置 - 自动选择节点
  */
 export function generateSingBoxConfig(selectedRules = [], customRules = [], nodes = []) {
   const ruleSets = generateRuleSets(selectedRules, customRules);
@@ -591,11 +619,34 @@ export function generateSingBoxConfig(selectedRules = [], customRules = [], node
         ...ruleSets.site_rule_sets,
         ...ruleSets.ip_rule_sets
       ],
-      rules: generateRules(selectedRules, customRules)
+      rules: [
+        // 自定义域名规则
+        ...CUSTOM_DOMAINS.map(domain => ({
+          domain: [domain],
+          outbound: '🚀 节点选择'
+        })),
+        // 其他规则
+        ...generateRules(selectedRules, customRules),
+        // 最终规则 - 自动选择节点
+        {
+          outbound: '🚀 节点选择'
+        }
+      ]
     }
   };
 
   return config;
+}
+
+// 为 Sing-box 添加自动选择负载均衡
+export function generateAutoSelectOutbound(proxies) {
+  return {
+    type: 'urltest',
+    tag: '⚡ 自动选择',
+    outbounds: proxies.map(p => p.tag),
+    url: 'https://www.gstatic.com/generate_204',
+    interval: '5m'
+  };
 }
 
 // Configuration templates
@@ -777,5 +828,6 @@ export default {
   PROXY_NODES,
   CUSTOM_DOMAINS,
   generateClashConfig,
-  generateSingBoxConfig
+  generateSingBoxConfig,
+  generateAutoSelectOutbound
 };
