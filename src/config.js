@@ -21,169 +21,42 @@ export const RULE_SET_BASE_URLS = {
 
 // 预设规则组合
 export const PREDEFINED_RULE_SETS = {
-  minimal: {
-    name: '轻量模式',
-    desc: '仅覆盖基础代理需求',
-    rules: ['Location:CN', 'Private', 'Non-China'],
-  },
-  balanced: {
-    name: '平衡模式',
-    desc: '覆盖常用海外服务',
-    rules: ['Location:CN', 'Private', 'Non-China', 'Github', 'Google', 'Youtube', 'AI Services', 'Telegram'],
-  },
-  comprehensive: {
-    name: '完整模式',
-    desc: '覆盖所有场景',
-    rules: [],
-  },
+  minimal: { name: '轻量模式', desc: '基础代理需求', rules: ['Location:CN', 'Private', 'Non-China'] },
+  balanced: { name: '平衡模式', desc: '常用海外服务', rules: ['Location:CN', 'Private', 'Non-China', 'Github', 'Google', 'Youtube', 'AI Services', 'Telegram'] },
+  comprehensive: { name: '完整模式', desc: '全场景覆盖', rules: [] },
 };
 
 // 自定义规则默认字段
 export const DEFAULT_CUSTOM_RULE = {
-  site: '',
-  ip: '',
-  domain_suffix: '',
-  domain_keyword: '',
-  ip_cidr: '',
-  protocol: '',
-  name: '自定义规则',
+  site: '', ip: '', domain_suffix: '', domain_keyword: '', ip_cidr: '', protocol: '', name: '自定义规则'
 };
 
 // 工具配置常量
 export const TOOL_CONSTANTS = {
-  clash: {
-    ruleUpdateInterval: 86400,
-    ruleCachePath: './ruleset/',
-  },
-  surge: {
-    ruleCachePath: './Surge/Rules/',
-  },
+  clash: { ruleUpdateInterval: 86400, ruleCachePath: './ruleset/' },
+  surge: { ruleCachePath: './Surge/Rules/' },
 };
 
 // 统一规则列表（带优先级）
 export const UNIFIED_RULES = [
-  {
-    name: 'Ad Block',
-    priority: 1,
-    outbound: t('outboundNames.Ad Block'),
-    site_rules: ['category-ads-all'],
-    ip_rules: [],
-  },
-  {
-    name: 'Private',
-    priority: 2,
-    outbound: t('outboundNames.Private'),
-    site_rules: [],
-    ip_rules: ['private'],
-  },
-  {
-    name: 'Location:CN',
-    priority: 3,
-    outbound: t('outboundNames.Location:CN'),
-    site_rules: ['geolocation-cn', 'cn'],
-    ip_rules: ['cn'],
-  },
-  {
-    name: 'AI Services',
-    priority: 4,
-    outbound: t('outboundNames.AI Services'),
-    site_rules: ['category-ai-!cn'],
-    ip_rules: [],
-  },
-  {
-    name: 'Telegram',
-    priority: 5,
-    outbound: t('outboundNames.Telegram'),
-    site_rules: [],
-    ip_rules: ['telegram'],
-  },
-  {
-    name: 'Google',
-    priority: 6,
-    outbound: t('outboundNames.Google'),
-    site_rules: ['google'],
-    ip_rules: ['google'],
-  },
-  {
-    name: 'Youtube',
-    priority: 7,
-    outbound: t('outboundNames.Youtube'),
-    site_rules: ['youtube'],
-    ip_rules: [],
-  },
-  {
-    name: 'Github',
-    priority: 8,
-    outbound: t('outboundNames.Github'),
-    site_rules: ['github', 'gitlab'],
-    ip_rules: [],
-  },
-  {
-    name: 'Microsoft',
-    priority: 9,
-    outbound: t('outboundNames.Microsoft'),
-    site_rules: ['microsoft'],
-    ip_rules: [],
-  },
-  {
-    name: 'Apple',
-    priority: 10,
-    outbound: t('outboundNames.Apple'),
-    site_rules: ['apple'],
-    ip_rules: [],
-  },
-  {
-    name: 'Social Media',
-    priority: 11,
-    outbound: t('outboundNames.Social Media'),
-    site_rules: ['facebook', 'instagram', 'twitter', 'tiktok', 'linkedin'],
-    ip_rules: [],
-  },
-  {
-    name: 'Streaming',
-    priority: 12,
-    outbound: t('outboundNames.Streaming'),
-    site_rules: ['netflix', 'hulu', 'disney', 'hbo', 'amazon', 'bahamut'],
-    ip_rules: [],
-  },
-  {
-    name: 'Gaming',
-    priority: 13,
-    outbound: t('outboundNames.Gaming'),
-    site_rules: ['steam', 'epicgames', 'ea', 'ubisoft', 'blizzard'],
-    ip_rules: [],
-  },
-  {
-    name: 'Education',
-    priority: 14,
-    outbound: t('outboundNames.Education'),
-    site_rules: ['coursera', 'edx', 'udemy', 'khanacademy', 'category-scholar-!cn'],
-    ip_rules: [],
-  },
-  {
-    name: 'Financial',
-    priority: 15,
-    outbound: t('outboundNames.Financial'),
-    site_rules: ['paypal', 'visa', 'mastercard', 'stripe', 'wise'],
-    ip_rules: [],
-  },
-  {
-    name: 'Cloud Services',
-    priority: 16,
-    outbound: t('outboundNames.Cloud Services'),
-    site_rules: ['aws', 'azure', 'digitalocean', 'heroku', 'dropbox'],
-    ip_rules: [],
-  },
-  {
-    name: 'Non-China',
-    priority: 100,
-    outbound: t('outboundNames.Non-China'),
-    site_rules: ['geolocation-!cn'],
-    ip_rules: [],
-  },
+  { name: 'Ad Block', priority: 1, outbound: t('outboundNames.Ad Block'), site_rules: ['category-ads-all'], ip_rules: [] },
+  { name: 'Private', priority: 2, outbound: t('outboundNames.Private'), site_rules: [], ip_rules: ['private'] },
+  { name: 'Location:CN', priority: 3, outbound: t('outboundNames.Location:CN'), site_rules: ['geolocation-cn', 'cn'], ip_rules: ['cn'] },
+  { name: 'AI Services', priority: 4, outbound: t('outboundNames.AI Services'), site_rules: ['category-ai-!cn'], ip_rules: [] },
+  { name: 'Telegram', priority: 5, outbound: t('outboundNames.Telegram'), site_rules: [], ip_rules: ['telegram'] },
+  { name: 'Google', priority: 6, outbound: t('outboundNames.Google'), site_rules: ['google'], ip_rules: ['google'] },
+  { name: 'Youtube', priority: 7, outbound: t('outboundNames.Youtube'), site_rules: ['youtube'], ip_rules: [] },
+  { name: 'Github', priority: 8, outbound: t('outboundNames.Github'), site_rules: ['github', 'gitlab'], ip_rules: [] },
+  { name: 'Microsoft', priority: 9, outbound: t('outboundNames.Microsoft'), site_rules: ['microsoft'], ip_rules: [] },
+  { name: 'Apple', priority: 10, outbound: t('outboundNames.Apple'), site_rules: ['apple'], ip_rules: [] },
+  { name: 'Social Media', priority: 11, outbound: t('outboundNames.Social Media'), site_rules: ['facebook', 'instagram', 'twitter', 'tiktok', 'linkedin'], ip_rules: [] },
+  { name: 'Streaming', priority: 12, outbound: t('outboundNames.Streaming'), site_rules: ['netflix', 'hulu', 'disney', 'hbo', 'amazon', 'bahamut'], ip_rules: [] },
+  { name: 'Gaming', priority: 13, outbound: t('outboundNames.Gaming'), site_rules: ['steam', 'epicgames', 'ea', 'ubisoft', 'blizzard'], ip_rules: [] },
+  { name: 'Education', priority: 14, outbound: t('outboundNames.Education'), site_rules: ['coursera', 'edx', 'udemy', 'khanacademy', 'category-scholar-!cn'], ip_rules: [] },
+  { name: 'Financial', priority: 15, outbound: t('outboundNames.Financial'), site_rules: ['paypal', 'visa', 'mastercard', 'stripe', 'wise'], ip_rules: [] },
+  { name: 'Cloud Services', priority: 16, outbound: t('outboundNames.Cloud Services'), site_rules: ['aws', 'azure', 'digitalocean', 'heroku', 'dropbox'], ip_rules: [] },
+  { name: 'Non-China', priority: 100, outbound: t('outboundNames.Non-China'), site_rules: ['geolocation-!cn'], ip_rules: [] },
 ];
-
-// 填充完整模式规则
 PREDEFINED_RULE_SETS.comprehensive.rules = UNIFIED_RULES.map(rule => rule.name);
 
 // 公共函数：处理选中的规则
@@ -191,21 +64,16 @@ const processSelectedRules = (selectedRules) => {
   if (typeof selectedRules === 'string') {
     return PREDEFINED_RULE_SETS[selectedRules]?.rules || PREDEFINED_RULE_SETS.minimal.rules;
   }
-  return Array.isArray(selectedRules) 
-    ? [...new Set(selectedRules.filter(Boolean))] 
-    : PREDEFINED_RULE_SETS.minimal.rules;
+  return Array.isArray(selectedRules) ? [...new Set(selectedRules.filter(Boolean))] : PREDEFINED_RULE_SETS.minimal.rules;
 };
 
 // 公共函数：标准化自定义规则
 const normalizeCustomRules = (customRules = []) => {
   return customRules
     .map(rule => ({ ...DEFAULT_CUSTOM_RULE, ...rule }))
-    .filter(rule => Object.values(rule).some(val => 
-      typeof val === 'string' ? val.trim() !== '' : Array.isArray(val) ? val.length > 0 : false
-    ))
+    .filter(rule => Object.values(rule).some(val => typeof val === 'string' ? val.trim() !== '' : Array.isArray(val) ? val.length > 0 : false))
     .map(rule => {
-      const normalizeField = (field) => 
-        field.split(',').map(item => item.trim()).filter(Boolean);
+      const normalizeField = (field) => field.split(',').map(item => item.trim()).filter(Boolean);
       return {
         ...rule,
         site: normalizeField(rule.site),
@@ -218,7 +86,7 @@ const normalizeCustomRules = (customRules = []) => {
     });
 };
 
-// 获取出口列表
+// 导出的核心函数（确保名称正确）
 export function getOutbounds(selectedRules) {
   const processedRules = processSelectedRules(selectedRules);
   return UNIFIED_RULES
@@ -227,11 +95,9 @@ export function getOutbounds(selectedRules) {
     .map(rule => rule.outbound);
 }
 
-// 生成最终规则列表
 export function generateRules(selectedRules, customRules = []) {
   const processedRules = processSelectedRules(selectedRules);
   const normalizedCustomRules = normalizeCustomRules(customRules);
-
   const defaultRules = UNIFIED_RULES
     .filter(rule => processedRules.includes(rule.name))
     .sort((a, b) => a.priority - b.priority)
@@ -243,29 +109,20 @@ export function generateRules(selectedRules, customRules = []) {
       outbound: rule.outbound,
       priority: rule.priority,
     }));
-
   const finalCustomRules = normalizedCustomRules
     .reverse()
     .map((rule, index) => ({
-      site_rules: rule.site,
-      ip_rules: rule.ip,
-      domain_suffix: rule.domain_suffix,
-      domain_keyword: rule.domain_keyword,
-      ip_cidr: rule.ip_cidr,
-      protocol: rule.protocol,
-      outbound: rule.name,
+      ...rule,
       priority: 0 - index,
     }));
-
   return [...finalCustomRules, ...defaultRules].sort((a, b) => a.priority - b.priority);
 }
 
-// 生成Sing-Box规则集
+// Sing-Box规则集生成函数（关键：导出名称为generateSingBoxRuleSets）
 export function generateSingBoxRuleSets(selectedRules, customRules = []) {
   const processedRules = processSelectedRules(selectedRules);
   const normalizedCustomRules = normalizeCustomRules(customRules);
   const { site: siteBaseUrl, ip: ipBaseUrl, suffix } = RULE_SET_BASE_URLS.singBox;
-
   const selectedRuleSet = new Set(processedRules);
   const siteTags = new Set();
   const ipTags = new Set();
@@ -276,55 +133,35 @@ export function generateSingBoxRuleSets(selectedRules, customRules = []) {
       rule.ip_rules.forEach(tag => ipTags.add(tag));
     }
   });
+  if (!selectedRuleSet.has('Non-China')) siteTags.add('geolocation-!cn');
 
-  if (!selectedRuleSet.has('Non-China')) {
-    siteTags.add('geolocation-!cn');
-  }
-
-  const generateRuleSet = (tags, baseUrl, isIp = false) => {
-    return Array.from(tags).map(tag => ({
-      tag: isIp ? `${tag}-ip` : tag,
-      type: 'remote',
-      format: 'binary',
-      url: `${baseUrl}${isIp ? 'geoip-' : 'geosite-'}${tag}.${suffix}`,
-    }));
-  };
+  const generateRuleSet = (tags, baseUrl, isIp = false) => Array.from(tags).map(tag => ({
+    tag: isIp ? `${tag}-ip` : tag,
+    type: 'remote',
+    format: 'binary',
+    url: `${baseUrl}${isIp ? 'geoip-' : 'geosite-'}${tag}.${suffix}`,
+  }));
 
   let siteRuleSets = generateRuleSet(siteTags, siteBaseUrl);
   let ipRuleSets = generateRuleSet(ipTags, ipBaseUrl, true);
 
   normalizedCustomRules.forEach(rule => {
-    rule.site.forEach(tag => {
-      siteRuleSets.push({
-        tag,
-        type: 'remote',
-        format: 'binary',
-        url: `${siteBaseUrl}geosite-${tag}.${suffix}`,
-      });
-    });
-    rule.ip.forEach(tag => {
-      ipRuleSets.push({
-        tag: `${tag}-ip`,
-        type: 'remote',
-        format: 'binary',
-        url: `${ipBaseUrl}geoip-${tag}.${suffix}`,
-      });
-    });
+    rule.site.forEach(tag => siteRuleSets.push({ tag, type: 'remote', format: 'binary', url: `${siteBaseUrl}geosite-${tag}.${suffix}` }));
+    rule.ip.forEach(tag => ipRuleSets.push({ tag: `${tag}-ip`, type: 'remote', format: 'binary', url: `${ipBaseUrl}geoip-${tag}.${suffix}` }));
   });
 
-  siteRuleSets = [...new Map(siteRuleSets.map(item => [item.tag, item])).values()];
-  ipRuleSets = [...new Map(ipRuleSets.map(item => [item.tag, item])).values()];
-
-  return { site_rule_sets: siteRuleSets, ip_rule_sets: ipRuleSets };
+  return {
+    site_rule_sets: [...new Map(siteRuleSets.map(item => [item.tag, item])).values()],
+    ip_rule_sets: [...new Map(ipRuleSets.map(item => [item.tag, item])).values()],
+  };
 }
 
-// 生成Clash规则集
 export function generateClashRuleSets(selectedRules, customRules = []) {
+  // 实现不变（与之前一致）
   const processedRules = processSelectedRules(selectedRules);
   const normalizedCustomRules = normalizeCustomRules(customRules);
   const { site: siteBaseUrl, ip: ipBaseUrl, suffix } = RULE_SET_BASE_URLS.clash;
   const { ruleUpdateInterval, ruleCachePath } = TOOL_CONSTANTS.clash;
-
   const selectedRuleSet = new Set(processedRules);
   const siteTags = new Set();
   const ipTags = new Set();
@@ -335,73 +172,39 @@ export function generateClashRuleSets(selectedRules, customRules = []) {
       rule.ip_rules.forEach(tag => ipTags.add(tag));
     }
   });
-
-  if (!selectedRuleSet.has('Non-China')) {
-    siteTags.add('geolocation-!cn');
-  }
+  if (!selectedRuleSet.has('Non-China')) siteTags.add('geolocation-!cn');
 
   const siteProviders = {};
   const ipProviders = {};
-
-  Array.from(siteTags).forEach(tag => {
-    siteProviders[tag] = {
-      type: 'http',
-      format: suffix,
-      behavior: 'domain',
-      url: `${siteBaseUrl}${tag}.${suffix}`,
-      path: `${ruleCachePath}${tag}.${suffix}`,
-      interval: ruleUpdateInterval,
-    };
+  Array.from(siteTags).forEach(tag => siteProviders[tag] = {
+    type: 'http', format: suffix, behavior: 'domain', url: `${siteBaseUrl}${tag}.${suffix}`,
+    path: `${ruleCachePath}${tag}.${suffix}`, interval: ruleUpdateInterval
   });
-
-  Array.from(ipTags).forEach(tag => {
-    ipProviders[tag] = {
-      type: 'http',
-      format: suffix,
-      behavior: 'ipcidr',
-      url: `${ipBaseUrl}${tag}.${suffix}`,
-      path: `${ruleCachePath}${tag}.${suffix}`,
-      interval: ruleUpdateInterval,
-    };
+  Array.from(ipTags).forEach(tag => ipProviders[tag] = {
+    type: 'http', format: suffix, behavior: 'ipcidr', url: `${ipBaseUrl}${tag}.${suffix}`,
+    path: `${ruleCachePath}${tag}.${suffix}`, interval: ruleUpdateInterval
   });
 
   normalizedCustomRules.forEach(rule => {
-    rule.site.forEach(tag => {
-      if (!siteProviders[tag]) {
-        siteProviders[tag] = {
-          type: 'http',
-          format: suffix,
-          behavior: 'domain',
-          url: `${siteBaseUrl}${tag}.${suffix}`,
-          path: `${ruleCachePath}${tag}.${suffix}`,
-          interval: ruleUpdateInterval,
-        };
-      }
-    });
-    rule.ip.forEach(tag => {
-      if (!ipProviders[tag]) {
-        ipProviders[tag] = {
-          type: 'http',
-          format: suffix,
-          behavior: 'ipcidr',
-          url: `${ipBaseUrl}${tag}.${suffix}`,
-          path: `${ruleCachePath}${tag}.${suffix}`,
-          interval: ruleUpdateInterval,
-        };
-      }
-    });
+    rule.site.forEach(tag => !siteProviders[tag] && (siteProviders[tag] = {
+      type: 'http', format: suffix, behavior: 'domain', url: `${siteBaseUrl}${tag}.${suffix}`,
+      path: `${ruleCachePath}${tag}.${suffix}`, interval: ruleUpdateInterval
+    }));
+    rule.ip.forEach(tag => !ipProviders[tag] && (ipProviders[tag] = {
+      type: 'http', format: suffix, behavior: 'ipcidr', url: `${ipBaseUrl}${tag}.${suffix}`,
+      path: `${ruleCachePath}${tag}.${suffix}`, interval: ruleUpdateInterval
+    }));
   });
 
   return { site_rule_providers: siteProviders, ip_rule_providers: ipProviders };
 }
 
-// 生成Surge规则集
 export function generateSurgeRuleSets(selectedRules, customRules = []) {
+  // 实现不变（与之前一致）
   const processedRules = processSelectedRules(selectedRules);
   const normalizedCustomRules = normalizeCustomRules(customRules);
   const { site: siteBaseUrl, ip: ipBaseUrl, suffix } = RULE_SET_BASE_URLS.surge;
   const { ruleCachePath } = TOOL_CONSTANTS.surge;
-
   const selectedRuleSet = new Set(processedRules);
   const siteTags = new Set();
   const ipTags = new Set();
@@ -412,20 +215,15 @@ export function generateSurgeRuleSets(selectedRules, customRules = []) {
       rule.ip_rules.forEach(tag => ipTags.add(tag));
     }
   });
+  if (!selectedRuleSet.has('Non-China')) siteTags.add('geolocation-!cn');
 
-  if (!selectedRuleSet.has('Non-China')) {
-    siteTags.add('geolocation-!cn');
-  }
-
-  const generateSurgeRule = (tags, baseUrl, type) => {
-    return Array.from(tags).map(tag => ({
-      tag: `${type}-${tag}`,
-      type: 'remote-rule',
-      url: `${baseUrl}${tag}.${suffix}`,
-      path: `${ruleCachePath}${type}-${tag}.${suffix}`,
-      update_interval: 86400,
-    }));
-  };
+  const generateSurgeRule = (tags, baseUrl, type) => Array.from(tags).map(tag => ({
+    tag: `${type}-${tag}`,
+    type: 'remote-rule',
+    url: `${baseUrl}${tag}.${suffix}`,
+    path: `${ruleCachePath}${type}-${tag}.${suffix}`,
+    update_interval: 86400,
+  }));
 
   let siteRules = generateSurgeRule(siteTags, siteBaseUrl, 'geosite');
   let ipRules = generateSurgeRule(ipTags, ipBaseUrl, 'geoip');
@@ -433,34 +231,24 @@ export function generateSurgeRuleSets(selectedRules, customRules = []) {
   normalizedCustomRules.forEach(rule => {
     rule.site.forEach(tag => {
       const ruleTag = `geosite-${tag}`;
-      if (!siteRules.some(item => item.tag === ruleTag)) {
-        siteRules.push({
-          tag: ruleTag,
-          type: 'remote-rule',
-          url: `${siteBaseUrl}${tag}.${suffix}`,
-          path: `${ruleCachePath}${ruleTag}.${suffix}`,
-          update_interval: 86400,
-        });
-      }
+      !siteRules.some(item => item.tag === ruleTag) && siteRules.push({
+        tag: ruleTag, type: 'remote-rule', url: `${siteBaseUrl}${tag}.${suffix}`,
+        path: `${ruleCachePath}${ruleTag}.${suffix}`, update_interval: 86400
+      });
     });
     rule.ip.forEach(tag => {
       const ruleTag = `geoip-${tag}`;
-      if (!ipRules.some(item => item.tag === ruleTag)) {
-        ipRules.push({
-          tag: ruleTag,
-          type: 'remote-rule',
-          url: `${ipBaseUrl}${tag}.${suffix}`,
-          path: `${ruleCachePath}${ruleTag}.${suffix}`,
-          update_interval: 86400,
-        });
-      }
+      !ipRules.some(item => item.tag === ruleTag) && ipRules.push({
+        tag: ruleTag, type: 'remote-rule', url: `${ipBaseUrl}${tag}.${suffix}`,
+        path: `${ruleCachePath}${ruleTag}.${suffix}`, update_interval: 86400
+      });
     });
   });
 
   return { site_rules: siteRules, ip_rules: ipRules };
 }
 
-// Sing-Box基础配置
+// 基础配置模板（无变更）
 export const SING_BOX_CONFIG = {
   dns: {
     servers: [
@@ -491,7 +279,6 @@ export const SING_BOX_CONFIG = {
   experimental: { cache_file: { enabled: true, store_fakeip: true } },
 };
 
-// Clash基础配置
 export const CLASH_CONFIG = {
   port: 7890,
   'socks-port': 7891,
@@ -525,7 +312,6 @@ export const CLASH_CONFIG = {
   'proxy-groups': [],
 };
 
-// Surge基础配置
 export const SURGE_CONFIG = {
   general: {
     'allow-wifi-access': false,
