@@ -2,7 +2,6 @@
   "name": "sublink-plus",
   "version": "0.0.1",
   "private": true,
-  "type": "module",
   "scripts": {
     "deploy": "npm run setup-kv && wrangler deploy",
     "dev": "wrangler dev",
