@@ -28,6 +28,14 @@ export const RULE_SET_BASE_URLS = {
   }
 };
 
+// 添加缺失的导出 - 保持与之前代码的兼容性
+export const SITE_RULE_SET_BASE_URL = RULE_SET_BASE_URLS[CONFIG_TYPES.SING_BOX][RULE_TYPES.SITE];
+export const IP_RULE_SET_BASE_URL = RULE_SET_BASE_URLS[CONFIG_TYPES.SING_BOX][RULE_TYPES.IP];
+export const CLASH_SITE_RULE_SET_BASE_URL = RULE_SET_BASE_URLS[CONFIG_TYPES.CLASH][RULE_TYPES.SITE];
+export const CLASH_IP_RULE_SET_BASE_URL = RULE_SET_BASE_URLS[CONFIG_TYPES.CLASH][RULE_TYPES.IP];
+export const SURGE_SITE_RULE_SET_BASEURL = RULE_SET_BASE_URLS[CONFIG_TYPES.SURGE][RULE_TYPES.SITE];
+export const SURGE_IP_RULE_SET_BASEURL = RULE_SET_BASE_URLS[CONFIG_TYPES.SURGE][RULE_TYPES.IP];
+
 // File extensions for different config types
 export const FILE_EXTENSIONS = {
   [CONFIG_TYPES.SING_BOX]: 'srs',
@@ -234,6 +242,12 @@ export const generateRuleSetMappings = (configType) => {
 // Get rule set mappings for different config types
 export const SING_BOX_RULE_SETS = generateRuleSetMappings(CONFIG_TYPES.SING_BOX);
 export const CLASH_RULE_SETS = generateRuleSetMappings(CONFIG_TYPES.CLASH);
+
+// 保持向后兼容的导出
+export const SITE_RULE_SETS = SING_BOX_RULE_SETS.siteRuleSets;
+export const IP_RULE_SETS = SING_BOX_RULE_SETS.ipRuleSets;
+export const CLASH_SITE_RULE_SETS = CLASH_RULE_SETS.siteRuleSets;
+export const CLASH_IP_RULE_SETS = CLASH_RULE_SETS.ipRuleSets;
 
 /**
  * Get outbounds based on selected rule names
