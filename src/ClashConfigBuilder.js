@@ -13,44 +13,29 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.selectedRules = selectedRules;
         this.customRules = customRules;
         
-        // 初始化代理数组，确保只包含唯一的 DIRECT 和 REJECT
+        // 初始化代理数组
         this.config.proxies = this.config.proxies || [];
-        this.ensureBasicProxies();
+        
+        // 确保基本代理存在且唯一
+        this.ensureUniqueBasicProxies();
     }
 
-    // 确保基本的 DIRECT 和 REJECT 代理存在且唯一
-    ensureBasicProxies() {
-        const hasDirect = this.config.proxies.some(p => p.name === 'DIRECT');
-        const hasReject = this.config.proxies.some(p => p.name === 'REJECT');
+    // 确保基本的 DIRECT 和 REJECT 代理唯一
+    ensureUniqueBasicProxies() {
+        // 移除所有现有的 DIRECT 和 REJECT 代理
+        this.config.proxies = this.config.proxies.filter(proxy => 
+            proxy.name !== 'DIRECT' && proxy.name !== 'REJECT'
+        );
         
-        if (!hasDirect) {
-            this.config.proxies.push({
-                name: 'DIRECT',
-                type: 'direct'
-            });
-        }
+        // 添加唯一的 DIRECT 和 REJECT 代理
+        this.config.proxies.push({
+            name: 'DIRECT',
+            type: 'direct'
+        });
         
-        if (!hasReject) {
-            this.config.proxies.push({
-                name: 'REJECT', 
-                type: 'reject'
-            });
-        }
-        
-        // 移除重复的 DIRECT 和 REJECT
-        this.removeDuplicateProxies();
-    }
-
-    // 移除重复的代理
-    removeDuplicateProxies() {
-        const seen = new Set();
-        this.config.proxies = this.config.proxies.filter(proxy => {
-            if (seen.has(proxy.name)) {
-                console.warn(`Removing duplicate proxy: ${proxy.name}`);
-                return false;
-            }
-            seen.add(proxy.name);
-            return true;
+        this.config.proxies.push({
+            name: 'REJECT', 
+            type: 'reject'
         });
     }
 
@@ -63,8 +48,9 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     }
 
     convertProxy(proxy) {
-        // 跳过 DIRECT 和 REJECT 代理的转换
-        if (proxy.type === 'direct' || proxy.type === 'reject') {
+        // 如果是 DIRECT 或 REJECT 类型，返回 null（因为我们已经手动添加）
+        if (proxy.type === 'direct' || proxy.type === 'reject' || 
+            proxy.tag === 'DIRECT' || proxy.tag === 'REJECT') {
             return null;
         }
 
@@ -277,7 +263,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
             'Education': '🎓 教育',
             'Financial': '💳 金融',
             'Cloud Services': '☁️ 云服务',
-            'Non-China': '🌍 非中国'
+            'Non-China': '🌐 非中国'  // 修改为与日志中显示一致的名称
         };
         
         return groupNames[outbound] || outbound;
@@ -324,11 +310,11 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         }
     }
 
-    // 生成规则
+    // 生成规则 - 强制使用自动选择
     generateRules() {
         const rules = generateRules(this.selectedRules, this.customRules);
         
-        // 将规则名称映射到代理组名称
+        // 将规则名称映射到代理组名称，并强制使用自动选择
         return rules.map(rule => {
             let groupName;
             
@@ -338,7 +324,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
             } else if (rule.outbound === 'Location:CN' || rule.outbound === 'Private') {
                 groupName = 'DIRECT';
             } else {
-                // 其他规则使用自动选择
+                // 其他需要代理的规则强制使用自动选择
                 groupName = '🚀 自动节点';
             }
             
@@ -462,8 +448,8 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         // 清空现有代理组
         this.config['proxy-groups'] = [];
         
-        // 确保基本代理存在
-        this.ensureBasicProxies();
+        // 确保基本代理存在且唯一
+        this.ensureUniqueBasicProxies();
         
         // 获取代理列表（排除 DIRECT 和 REJECT）
         const proxyList = this.getProxies()
@@ -507,17 +493,74 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
             
             // 检查重复代理名称
             const proxyNames = new Set();
+            let hasDuplicates = false;
+            
             parsed.proxies.forEach(proxy => {
                 if (proxyNames.has(proxy.name)) {
-                    throw new Error(`Duplicate proxy name: ${proxy.name}`);
+                    console.error(`Duplicate proxy found: ${proxy.name}`);
+                    hasDuplicates = true;
                 }
                 proxyNames.add(proxy.name);
             });
+            
+            if (hasDuplicates) {
+                throw new Error('Configuration contains duplicate proxy names');
+            }
             
             return true;
         } catch (error) {
             console.error('Configuration validation failed:', error);
             return false;
         }
+    }
+
+    // 新的构建方法 - 完全强制自动选择
+    buildStrictAutoSelect() {
+        // 清空现有代理组
+        this.config['proxy-groups'] = [];
+        
+        // 确保基本代理存在且唯一
+        this.ensureUniqueBasicProxies();
+        
+        // 获取代理列表（排除 DIRECT 和 REJECT）
+        const proxyList = this.getProxies()
+            .map(proxy => this.getProxyName(proxy))
+            .filter(name => name !== 'DIRECT' && name !== 'REJECT');
+        
+        // 只创建一个自动选择组，所有流量都通过这个组
+        this.config['proxy-groups'] = [
+            {
+                name: '🚀 自动节点',
+                type: 'url-test',
+                proxies: DeepCopy(proxyList),
+                url: 'http://www.gstatic.com/generate_204',
+                interval: 300,
+                tolerance: 50
+            }
+        ];
+
+        // 生成基本规则
+        const basicRules = [
+            // 局域网直连
+            'IP-CIDR,192.168.0.0/16,DIRECT,no-resolve',
+            'IP-CIDR,10.0.0.0/8,DIRECT,no-resolve',
+            'IP-CIDR,172.16.0.0/12,DIRECT,no-resolve',
+            'IP-CIDR,127.0.0.0/8,DIRECT,no-resolve',
+            'IP-CIDR,100.64.0.0/10,DIRECT,no-resolve',
+            
+            // GEOIP 中国直连
+            'GEOIP,CN,DIRECT',
+            
+            // 最终规则 - 所有其他流量使用自动选择
+            'MATCH,🚀 自动节点'
+        ];
+
+        this.config.rules = basicRules;
+
+        return yaml.dump(this.config, {
+            lineWidth: -1,
+            noRefs: true,
+            noCompatMode: true
+        });
     }
 }
