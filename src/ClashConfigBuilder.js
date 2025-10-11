@@ -12,6 +12,46 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         super(inputString, baseConfig, lang, userAgent);
         this.selectedRules = selectedRules;
         this.customRules = customRules;
+        
+        // 初始化代理数组，确保只包含唯一的 DIRECT 和 REJECT
+        this.config.proxies = this.config.proxies || [];
+        this.ensureBasicProxies();
+    }
+
+    // 确保基本的 DIRECT 和 REJECT 代理存在且唯一
+    ensureBasicProxies() {
+        const hasDirect = this.config.proxies.some(p => p.name === 'DIRECT');
+        const hasReject = this.config.proxies.some(p => p.name === 'REJECT');
+        
+        if (!hasDirect) {
+            this.config.proxies.push({
+                name: 'DIRECT',
+                type: 'direct'
+            });
+        }
+        
+        if (!hasReject) {
+            this.config.proxies.push({
+                name: 'REJECT', 
+                type: 'reject'
+            });
+        }
+        
+        // 移除重复的 DIRECT 和 REJECT
+        this.removeDuplicateProxies();
+    }
+
+    // 移除重复的代理
+    removeDuplicateProxies() {
+        const seen = new Set();
+        this.config.proxies = this.config.proxies.filter(proxy => {
+            if (seen.has(proxy.name)) {
+                console.warn(`Removing duplicate proxy: ${proxy.name}`);
+                return false;
+            }
+            seen.add(proxy.name);
+            return true;
+        });
     }
 
     getProxies() {
@@ -23,6 +63,11 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     }
 
     convertProxy(proxy) {
+        // 跳过 DIRECT 和 REJECT 代理的转换
+        if (proxy.type === 'direct' || proxy.type === 'reject') {
+            return null;
+        }
+
         switch(proxy.type) {
             case 'shadowsocks':
                 return {
@@ -131,28 +176,18 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     }
 
     addProxyToConfig(proxy) {
+        if (!proxy) return;
+        
         this.config.proxies = this.config.proxies || [];
     
-        // Find proxies with the same or partially matching name
-        const similarProxies = this.config.proxies.filter(p => p.name.includes(proxy.name));
-    
-        // Check if there is a proxy with identical data excluding the 'name' field
-        const isIdentical = similarProxies.some(p => {
-            const { name: _, ...restOfProxy } = proxy;
-            const { name: __, ...restOfP } = p;
-            return JSON.stringify(restOfProxy) === JSON.stringify(restOfP);
-        });
-    
-        if (isIdentical) {
+        // 检查是否已存在相同名称的代理
+        const existingProxy = this.config.proxies.find(p => p.name === proxy.name);
+        if (existingProxy) {
+            console.warn(`Proxy with name ${proxy.name} already exists, skipping`);
             return;
         }
     
-        // If there are proxies with similar names but different data, modify the name
-        if (similarProxies.length > 0) {
-            proxy.name = `${proxy.name} ${similarProxies.length + 1}`;
-        }
-    
-        // Add the proxy to the configuration
+        // 添加代理到配置
         this.config.proxies.push(proxy);
     }
 
@@ -160,21 +195,27 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.config['proxy-groups'] = this.config['proxy-groups'] || [];
         
         // 创建自动选择组
-        this.config['proxy-groups'].push({
+        const autoSelectGroup = {
             name: '🚀 自动节点',
             type: 'url-test',
             proxies: DeepCopy(proxyList),
             url: 'http://www.gstatic.com/generate_204',
             interval: 300,
             tolerance: 50
-        });
+        };
+        
+        // 检查是否已存在自动选择组
+        const existingGroup = this.config['proxy-groups'].find(g => g.name === '🚀 自动节点');
+        if (!existingGroup) {
+            this.config['proxy-groups'].push(autoSelectGroup);
+        }
     }
 
     addNodeSelectGroup(proxyList) {
         this.config['proxy-groups'] = this.config['proxy-groups'] || [];
         
-        // 创建节点选择组 - 默认使用自动选择
-        this.config['proxy-groups'].unshift({
+        // 创建节点选择组
+        const nodeSelectGroup = {
             type: "select",
             name: "🚀 节点选择",
             proxies: [
@@ -183,59 +224,129 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                 'REJECT',
                 ...proxyList
             ]
-        });
+        };
+        
+        // 检查是否已存在节点选择组
+        const existingGroup = this.config['proxy-groups'].find(g => g.name === '🚀 节点选择');
+        if (!existingGroup) {
+            this.config['proxy-groups'].unshift(nodeSelectGroup);
+        }
     }
 
     addOutboundGroups(outbounds, proxyList) {
+        this.config['proxy-groups'] = this.config['proxy-groups'] || [];
+        
         outbounds.forEach(outbound => {
             if (outbound !== '🚀 节点选择') {
-                this.config['proxy-groups'].push({
-                    type: "select",
-                    name: outbound,
-                    proxies: [
-                        '🚀 自动节点',  // 默认自动选择
-                        'DIRECT',
-                        'REJECT',
-                        ...proxyList
-                    ]
-                });
+                const groupName = this.getOutboundGroupName(outbound);
+                const existingGroup = this.config['proxy-groups'].find(g => g.name === groupName);
+                
+                if (!existingGroup) {
+                    this.config['proxy-groups'].push({
+                        type: "select",
+                        name: groupName,
+                        proxies: [
+                            '🚀 自动节点',
+                            'DIRECT',
+                            'REJECT',
+                            ...proxyList
+                        ]
+                    });
+                }
             }
         });
+    }
+
+    // 根据规则名称获取代理组名称
+    getOutboundGroupName(outbound) {
+        const groupNames = {
+            'Ad Block': '🛡️ 广告拦截',
+            'AI Services': '🤖 AI服务',
+            'Bilibili': '📺 B站',
+            'Youtube': '🎥 YouTube', 
+            'Google': '🔍 Google',
+            'Private': '🔒 私有网络',
+            'Location:CN': '🇨🇳 中国网站',
+            'Telegram': '✈️ Telegram',
+            'Github': '💻 GitHub',
+            'Microsoft': '💼 Microsoft',
+            'Apple': '🍎 Apple',
+            'Social Media': '👥 社交媒体',
+            'Streaming': '🎬 流媒体',
+            'Gaming': '🎮 游戏',
+            'Education': '🎓 教育',
+            'Financial': '💳 金融',
+            'Cloud Services': '☁️ 云服务',
+            'Non-China': '🌍 非中国'
+        };
+        
+        return groupNames[outbound] || outbound;
     }
 
     addCustomRuleGroups(proxyList) {
         if (Array.isArray(this.customRules)) {
             this.customRules.forEach(rule => {
-                this.config['proxy-groups'].push({
-                    type: "select",
-                    name: rule.name,
-                    proxies: [
-                        '🚀 自动节点',  // 默认自动选择
-                        'DIRECT',
-                        'REJECT',
-                        ...proxyList
-                    ]
-                });
+                const existingGroup = this.config['proxy-groups'].find(g => g.name === rule.name);
+                
+                if (!existingGroup) {
+                    this.config['proxy-groups'].push({
+                        type: "select",
+                        name: rule.name,
+                        proxies: [
+                            '🚀 自动节点',
+                            'DIRECT',
+                            'REJECT',
+                            ...proxyList
+                        ]
+                    });
+                }
             });
         }
     }
 
     addFallBackGroup(proxyList) {
-        this.config['proxy-groups'].push({
+        this.config['proxy-groups'] = this.config['proxy-groups'] || [];
+        
+        const fallbackGroup = {
             type: "select",
-            name: "Fallback",
+            name: "🐟 漏网之鱼",
             proxies: [
-                '🚀 自动节点',  // 默认自动选择
+                '🚀 自动节点',
                 'DIRECT',
                 'REJECT',
                 ...proxyList
             ]
-        });
+        };
+        
+        const existingGroup = this.config['proxy-groups'].find(g => g.name === '🐟 漏网之鱼');
+        if (!existingGroup) {
+            this.config['proxy-groups'].push(fallbackGroup);
+        }
     }
 
     // 生成规则
     generateRules() {
-        return generateRules(this.selectedRules, this.customRules);
+        const rules = generateRules(this.selectedRules, this.customRules);
+        
+        // 将规则名称映射到代理组名称
+        return rules.map(rule => {
+            let groupName;
+            
+            // 特殊处理直连和拒绝规则
+            if (rule.outbound === 'DIRECT' || rule.outbound === 'REJECT') {
+                groupName = rule.outbound;
+            } else if (rule.outbound === 'Location:CN' || rule.outbound === 'Private') {
+                groupName = 'DIRECT';
+            } else {
+                // 其他规则使用自动选择
+                groupName = '🚀 自动节点';
+            }
+            
+            return {
+                ...rule,
+                groupName: groupName
+            };
+        });
     }
 
     formatConfig() {
@@ -254,34 +365,34 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         // 处理域名规则
         rules.filter(rule => rule.domain_suffix && rule.domain_suffix.length > 0).forEach(rule => {
             rule.domain_suffix.forEach(suffix => {
-                ruleResults.push(`DOMAIN-SUFFIX,${suffix},${rule.outbound}`);
+                ruleResults.push(`DOMAIN-SUFFIX,${suffix},${rule.groupName}`);
             });
         });
 
         rules.filter(rule => rule.domain_keyword && rule.domain_keyword.length > 0).forEach(rule => {
             rule.domain_keyword.forEach(keyword => {
-                ruleResults.push(`DOMAIN-KEYWORD,${keyword},${rule.outbound}`);
+                ruleResults.push(`DOMAIN-KEYWORD,${keyword},${rule.groupName}`);
             });
         });
 
         // 处理站点规则
         rules.filter(rule => rule.site_rules && rule.site_rules.length > 0).forEach(rule => {
             rule.site_rules.forEach(site => {
-                ruleResults.push(`RULE-SET,${site},${rule.outbound}`);
+                ruleResults.push(`RULE-SET,${site},${rule.groupName}`);
             });
         });
 
         // 处理IP规则
         rules.filter(rule => rule.ip_rules && rule.ip_rules.length > 0).forEach(rule => {
             rule.ip_rules.forEach(ip => {
-                ruleResults.push(`RULE-SET,${ip},${rule.outbound},no-resolve`);
+                ruleResults.push(`RULE-SET,${ip},${rule.groupName},no-resolve`);
             });
         });
 
         // 处理CIDR规则
         rules.filter(rule => rule.ip_cidr && rule.ip_cidr.length > 0).forEach(rule => {
             rule.ip_cidr.forEach(cidr => {
-                ruleResults.push(`IP-CIDR,${cidr},${rule.outbound},no-resolve`);
+                ruleResults.push(`IP-CIDR,${cidr},${rule.groupName},no-resolve`);
             });
         });
 
@@ -297,16 +408,52 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
             // GEOIP 中国直连
             'GEOIP,CN,DIRECT',
             
-            // 最终规则
-            'MATCH,🚀 自动节点'
+            // 最终规则 - 使用漏网之鱼组
+            'MATCH,🐟 漏网之鱼'
         ];
 
         this.config.rules = [...basicRules, ...ruleResults];
 
+        // 确保配置完整性
+        this.ensureConfigIntegrity();
+
         return yaml.dump(this.config, {
-            lineWidth: -1, // 不限制行宽
-            noRefs: true,  // 不引用重复对象
-            noCompatMode: true // 不使用兼容模式
+            lineWidth: -1,
+            noRefs: true,
+            noCompatMode: true
+        });
+    }
+
+    // 确保配置完整性
+    ensureConfigIntegrity() {
+        // 确保所有代理组中引用的代理都存在
+        this.config['proxy-groups']?.forEach(group => {
+            group.proxies = group.proxies.filter(proxyName => {
+                // 检查代理是否存在
+                const exists = this.config.proxies?.some(p => p.name === proxyName) || 
+                              ['DIRECT', 'REJECT'].includes(proxyName);
+                if (!exists) {
+                    console.warn(`Removing non-existent proxy ${proxyName} from group ${group.name}`);
+                }
+                return exists;
+            });
+        });
+
+        // 确保规则中引用的代理组都存在
+        const validGroups = new Set(this.config['proxy-groups']?.map(g => g.name) || []);
+        validGroups.add('DIRECT');
+        validGroups.add('REJECT');
+        
+        this.config.rules = this.config.rules?.filter(rule => {
+            const match = rule.match(/^[^,]+,([^,]+),/);
+            if (match) {
+                const groupName = match[1];
+                if (!validGroups.has(groupName)) {
+                    console.warn(`Removing rule with non-existent group: ${rule}`);
+                    return false;
+                }
+            }
+            return true;
         });
     }
 
@@ -315,32 +462,23 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         // 清空现有代理组
         this.config['proxy-groups'] = [];
         
-        // 获取代理列表
-        const proxyList = this.getProxies().map(proxy => this.getProxyName(proxy));
+        // 确保基本代理存在
+        this.ensureBasicProxies();
+        
+        // 获取代理列表（排除 DIRECT 和 REJECT）
+        const proxyList = this.getProxies()
+            .map(proxy => this.getProxyName(proxy))
+            .filter(name => name !== 'DIRECT' && name !== 'REJECT');
         
         // 确保有代理节点
         if (proxyList.length === 0) {
-            console.warn('No proxies found, adding fallback proxies');
-            // 添加一些基本代理作为fallback
-            this.config.proxies = this.config.proxies || [];
-            this.config.proxies.push({
-                name: 'DIRECT',
-                type: 'direct'
-            });
-            this.config.proxies.push({
-                name: 'REJECT', 
-                type: 'reject'
-            });
-            proxyList.push('DIRECT', 'REJECT');
+            console.warn('No proxies found, configuration may not work properly');
         }
         
-        // 添加自动选择组
+        // 添加代理组
         this.addAutoSelectGroup(proxyList);
-        
-        // 添加节点选择组
         this.addNodeSelectGroup(proxyList);
         
-        // 添加其他代理组
         const outbounds = getOutbounds(this.selectedRules);
         this.addOutboundGroups(outbounds, proxyList);
         this.addCustomRuleGroups(proxyList);
@@ -354,7 +492,6 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     validateConfig() {
         try {
             const configYaml = this.build();
-            // 尝试解析YAML来验证格式
             const parsed = yaml.load(configYaml);
             
             // 基本验证
@@ -367,6 +504,15 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
             if (!parsed.rules) {
                 throw new Error('Missing rules section');
             }
+            
+            // 检查重复代理名称
+            const proxyNames = new Set();
+            parsed.proxies.forEach(proxy => {
+                if (proxyNames.has(proxy.name)) {
+                    throw new Error(`Duplicate proxy name: ${proxy.name}`);
+                }
+                proxyNames.add(proxy.name);
+            });
             
             return true;
         } catch (error) {
