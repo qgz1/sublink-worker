@@ -170,22 +170,32 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
 
     addAutoSelectGroup(proxyList) {
         this.config['proxy-groups'] = this.config['proxy-groups'] || [];
+        
+        // 创建自动选择组 - 强制自动选择
         this.config['proxy-groups'].push({
-            name: t('outboundNames.Auto Select'),
+            name: '🚀 自动节点',
             type: 'url-test',
             proxies: DeepCopy(proxyList),
             url: 'https://www.gstatic.com/generate_204',
             interval: 300,
-            lazy: false
+            lazy: false,
+            tolerance: 50
         });
     }
 
     addNodeSelectGroup(proxyList) {
-        proxyList.unshift('DIRECT', 'REJECT', t('outboundNames.Auto Select'));
+        this.config['proxy-groups'] = this.config['proxy-groups'] || [];
+        
+        // 创建节点选择组 - 默认使用自动选择
         this.config['proxy-groups'].unshift({
             type: "select",
             name: t('outboundNames.Node Select'),
-            proxies: proxyList
+            proxies: [
+                '🚀 自动节点',  // 默认选项，强制自动选择
+                ...proxyList,
+                'DIRECT', 
+                'REJECT'
+            ]
         });
     }
 
@@ -195,7 +205,12 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                 this.config['proxy-groups'].push({
                     type: "select",
                     name: t(`outboundNames.${outbound}`),
-                    proxies: [t('outboundNames.Node Select'), ...proxyList]
+                    proxies: [
+                        '🚀 自动节点',  // 默认自动选择
+                        ...proxyList,
+                        'DIRECT',
+                        'REJECT'
+                    ]
                 });
             }
         });
@@ -207,7 +222,12 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                 this.config['proxy-groups'].push({
                     type: "select",
                     name: t(`outboundNames.${rule.name}`),
-                    proxies: [t('outboundNames.Node Select'), ...proxyList]
+                    proxies: [
+                        '🚀 自动节点',  // 默认自动选择
+                        ...proxyList,
+                        'DIRECT',
+                        'REJECT'
+                    ]
                 });
             });
         }
@@ -217,13 +237,31 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.config['proxy-groups'].push({
             type: "select",
             name: t('outboundNames.Fall Back'),
-            proxies: [t('outboundNames.Node Select'), ...proxyList]
+            proxies: [
+                '🚀 自动节点',  // 默认自动选择
+                ...proxyList,
+                'DIRECT',
+                'REJECT'
+            ]
         });
     }
 
-    // 生成规则
+    // 生成规则 - 强制使用自动选择
     generateRules() {
-        return generateRules(this.selectedRules, this.customRules);
+        const rules = generateRules(this.selectedRules, this.customRules);
+        
+        // 修改规则，强制使用自动选择组
+        return rules.map(rule => {
+            // 对于需要代理的规则，强制使用自动选择
+            if (rule.outbound !== 'DIRECT' && rule.outbound !== 'REJECT' && 
+                rule.outbound !== 'Location:CN' && rule.outbound !== 'Private') {
+                return {
+                    ...rule,
+                    outbound: '🚀 自动节点'  // 强制使用自动选择
+                };
+            }
+            return rule;
+        });
     }
 
     formatConfig() {
@@ -245,35 +283,65 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
 
         rules.filter(rule => !!rule.domain_suffix || !!rule.domain_keyword).map(rule => {
             rule.domain_suffix.forEach(suffix => {
-                ruleResults.push(`DOMAIN-SUFFIX,${suffix},${t('outboundNames.'+ rule.outbound)}`);
+                ruleResults.push(`DOMAIN-SUFFIX,${suffix},${rule.outbound}`);
             });
             rule.domain_keyword.forEach(keyword => {
-                ruleResults.push(`DOMAIN-KEYWORD,${keyword},${t('outboundNames.'+ rule.outbound)}`);
+                ruleResults.push(`DOMAIN-KEYWORD,${keyword},${rule.outbound}`);
             });
         });
 
         rules.filter(rule => !!rule.site_rules[0]).map(rule => {
             rule.site_rules.forEach(site => {
-                ruleResults.push(`RULE-SET,${site},${t('outboundNames.'+ rule.outbound)}`);
+                ruleResults.push(`RULE-SET,${site},${rule.outbound}`);
             });
         });
 
         rules.filter(rule => !!rule.ip_rules[0]).map(rule => {
             rule.ip_rules.forEach(ip => {
-                ruleResults.push(`RULE-SET,${ip},${t('outboundNames.'+ rule.outbound)},no-resolve`);
+                ruleResults.push(`RULE-SET,${ip},${rule.outbound},no-resolve`);
             });
         });
 
         rules.filter(rule => !!rule.ip_cidr).map(rule => {
             rule.ip_cidr.forEach(cidr => {
-                ruleResults.push(`IP-CIDR,${cidr},${t('outboundNames.'+ rule.outbound)},no-resolve`);
+                ruleResults.push(`IP-CIDR,${cidr},${rule.outbound},no-resolve`);
             });
         });
 
-        this.config.rules = [...ruleResults]
+        this.config.rules = [...ruleResults];
 
-        this.config.rules.push(`MATCH,${t('outboundNames.Fall Back')}`);
+        // 最终规则 - 强制使用自动选择
+        this.config.rules.push(`MATCH,🚀 自动节点`);
 
         return yaml.dump(this.config);
+    }
+
+    // 新的构建方法 - 强制自动选择
+    buildAutoSelectConfig() {
+        // 清空现有代理组
+        this.config['proxy-groups'] = [];
+        
+        // 获取代理列表
+        const proxyList = this.getProxies().map(proxy => this.getProxyName(proxy));
+        
+        // 添加自动选择组
+        this.addAutoSelectGroup(proxyList);
+        
+        // 添加节点选择组（可选，用于手动选择）
+        this.addNodeSelectGroup(proxyList);
+        
+        // 添加其他代理组
+        const outbounds = getOutbounds(this.selectedRules);
+        this.addOutboundGroups(outbounds, proxyList);
+        this.addCustomRuleGroups(proxyList);
+        this.addFallBackGroup(proxyList);
+
+        // 格式化配置
+        return this.formatConfig();
+    }
+
+    // 重写原始构建方法，默认使用自动选择
+    build() {
+        return this.buildAutoSelectConfig();
     }
 }
