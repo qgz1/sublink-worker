@@ -485,17 +485,12 @@ export function generateClashRuleSets(selectedRules = [], customRules = []) {
   };
 }
 
-// 节点配置 - 保持你要求的显示顺序
+// 节点配置 - 简化配置，只保留必要的自动选择
 export const PROXY_NODES = [
   {
-    name: '🚀 节点选择',
-    type: 'select',
-    tag: 'node-selector'
-  },
-  {
-    name: 'Selector',
-    type: 'select', 
-    tag: 'selector'
+    name: '⚡ 自动选择',
+    type: 'url-test',
+    tag: 'auto-select'
   },
   {
     name: 'DIRECT',
@@ -506,11 +501,6 @@ export const PROXY_NODES = [
     name: 'REJECT',
     type: 'block',
     tag: 'REJECT'
-  },
-  {
-    name: '⚡ 自动选择',
-    type: 'url-test',
-    tag: 'auto-select'
   }
 ];
 
@@ -528,43 +518,29 @@ export const CUSTOM_DOMAINS = [
 ];
 
 /**
- * 生成完整的 Clash 配置 - 自动选择节点
+ * 生成完整的 Clash 配置 - 强制自动选择
  */
 export function generateClashConfig(selectedRules = [], customRules = [], proxies = []) {
   const ruleProviders = generateClashRuleSets(selectedRules, customRules);
   
-  // 创建代理组配置
+  // 创建代理组配置 - 直接使用自动选择组作为主要组
   const proxyGroups = [
-    // 主选择组 - 默认使用自动选择
+    // 主要代理组 - 直接使用自动选择，不提供手动选择
     {
       name: '🚀 节点选择',
-      type: 'select',
-      // 将"⚡ 自动选择"放在第一位，作为默认选项
-      proxies: [
-        '⚡ 自动选择',  // 默认自动选择
-        'Selector',
-        'DIRECT',
-        'REJECT',
-        ...proxies.map(p => p.name)
-      ]
-    },
-    // 自动选择组 - 自动测试并选择最快的节点
-    {
-      name: '⚡ 自动选择',
       type: 'url-test',
       proxies: proxies.map(p => p.name),
       url: 'http://www.gstatic.com/generate_204',
       interval: 300
     },
-    // 选择器组 - 提供手动选择选项
+    // 备用的手动选择组（可选）
     {
-      name: 'Selector',
+      name: '手动选择',
       type: 'select',
       proxies: [
-        '⚡ 自动选择',
+        ...proxies.map(p => p.name),
         'DIRECT',
-        'REJECT',
-        ...proxies.map(p => p.name)
+        'REJECT'
       ]
     }
   ];
@@ -584,13 +560,13 @@ export function generateClashConfig(selectedRules = [], customRules = [], proxie
     };
   }
 
-  // 生成规则 - 默认路由到自动选择
+  // 生成规则 - 直接指向自动选择组
   const rules = [
-    // 自定义域名规则 - 自动使用最快的节点
+    // 自定义域名规则 - 直接使用自动选择
     ...CUSTOM_DOMAINS.map(domain => `DOMAIN,${domain},🚀 节点选择`),
     // 国内流量直连
     'GEOIP,CN,DIRECT',
-    // 最终规则 - 自动选择节点
+    // 最终规则 - 直接使用自动选择
     'MATCH,🚀 节点选择'
   ];
 
@@ -600,16 +576,26 @@ export function generateClashConfig(selectedRules = [], customRules = [], proxie
 }
 
 /**
- * 生成完整的 Sing-box 配置 - 自动选择节点
+ * 生成完整的 Sing-box 配置 - 强制自动选择
  */
 export function generateSingBoxConfig(selectedRules = [], customRules = [], nodes = []) {
   const ruleSets = generateRuleSets(selectedRules, customRules);
   
+  // 创建自动选择出站
+  const autoSelectOutbound = {
+    type: 'urltest',
+    tag: '🚀 节点选择',
+    outbounds: nodes.map(n => n.tag),
+    url: 'https://www.gstatic.com/generate_204',
+    interval: '5m',
+    tolerance: 100
+  };
+
   const config = {
     ...SING_BOX_CONFIG,
     outbounds: [
       ...SING_BOX_CONFIG.outbounds,
-      ...PROXY_NODES,
+      autoSelectOutbound,
       ...nodes
     ],
     route: {
@@ -627,7 +613,7 @@ export function generateSingBoxConfig(selectedRules = [], customRules = [], node
         })),
         // 其他规则
         ...generateRules(selectedRules, customRules),
-        // 最终规则 - 自动选择节点
+        // 最终规则 - 直接使用自动选择
         {
           outbound: '🚀 节点选择'
         }
@@ -638,15 +624,51 @@ export function generateSingBoxConfig(selectedRules = [], customRules = [], node
   return config;
 }
 
-// 为 Sing-box 添加自动选择负载均衡
-export function generateAutoSelectOutbound(proxies) {
-  return {
-    type: 'urltest',
-    tag: '⚡ 自动选择',
-    outbounds: proxies.map(p => p.tag),
-    url: 'https://www.gstatic.com/generate_204',
-    interval: '5m'
+/**
+ * 为 OpenClash 生成专用配置
+ */
+export function generateOpenClashConfig(selectedRules = [], customRules = [], proxies = []) {
+  const ruleProviders = generateClashRuleSets(selectedRules, customRules);
+  
+  // OpenClash 专用配置 - 强制自动选择
+  const config = {
+    ...CLASH_CONFIG,
+    proxies: [...proxies],
+    'proxy-groups': [
+      // 主要组 - 直接使用自动选择
+      {
+        name: '🚀 自动节点',
+        type: 'url-test', 
+        proxies: proxies.map(p => p.name),
+        url: 'http://www.gstatic.com/generate_204',
+        interval: 300
+      }
+    ],
+    'rule-providers': ruleProviders.site_rule_providers,
+    rules: [
+      // 自定义域名
+      ...CUSTOM_DOMAINS.map(domain => `DOMAIN,${domain},🚀 自动节点`),
+      // 国内直连
+      'GEOIP,CN,DIRECT',
+      // 局域网直连
+      'IP-CIDR,192.168.0.0/16,DIRECT',
+      'IP-CIDR,10.0.0.0/8,DIRECT', 
+      'IP-CIDR,172.16.0.0/12,DIRECT',
+      'IP-CIDR,127.0.0.0/8,DIRECT',
+      // 最终规则 - 自动节点
+      'MATCH,🚀 自动节点'
+    ]
   };
+
+  // 添加 IP 规则提供商
+  if (Object.keys(ruleProviders.ip_rule_providers).length > 0) {
+    config['rule-providers'] = {
+      ...config['rule-providers'],
+      ...ruleProviders.ip_rule_providers
+    };
+  }
+
+  return config;
 }
 
 // Configuration templates
@@ -829,5 +851,5 @@ export default {
   CUSTOM_DOMAINS,
   generateClashConfig,
   generateSingBoxConfig,
-  generateAutoSelectOutbound
+  generateOpenClashConfig
 };
