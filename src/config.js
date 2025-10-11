@@ -485,6 +485,119 @@ export function generateClashRuleSets(selectedRules = [], customRules = []) {
   };
 }
 
+// 节点配置
+export const PROXY_NODES = [
+  {
+    name: '⚡ 自动选择',
+    type: 'url-test',
+    tag: 'auto-select'
+  },
+  {
+    name: 'DIRECT',
+    type: 'direct',
+    tag: 'DIRECT'
+  },
+  {
+    name: 'REJECT',
+    type: 'block',
+    tag: 'REJECT'
+  }
+];
+
+// 自定义域名列表
+export const CUSTOM_DOMAINS = [
+  'visa.com.hk',
+  'ip.sb',
+  'icook.tw',
+  'cf.877771.xyz',
+  'skk.moe',
+  'cdn.tzpro.xyz',
+  'bestcf.top',
+  'cf.090227.xyz',
+  'cf.zhetengsha.eu.or'
+];
+
+/**
+ * 生成完整的 Clash 配置
+ */
+export function generateClashConfig(selectedRules = [], customRules = [], proxies = []) {
+  const ruleProviders = generateClashRuleSets(selectedRules, customRules);
+  
+  const config = {
+    ...CLASH_CONFIG,
+    proxies: [...proxies],
+    'proxy-groups': [
+      {
+        name: '🚀 节点选择',
+        type: 'select',
+        // 修改顺序：⚡ 自动选择 在 DIRECT 和 REJECT 之前
+        proxies: [
+          '⚡ 自动选择',
+          'DIRECT', 
+          'REJECT',
+          ...proxies.map(p => p.name)
+        ]
+      },
+      {
+        name: '⚡ 自动选择',
+        type: 'url-test',
+        proxies: proxies.map(p => p.name),
+        url: 'http://www.gstatic.com/generate_204',
+        interval: 300
+      }
+    ],
+    'rule-providers': ruleProviders.site_rule_providers
+  };
+
+  // 添加 IP 规则提供商
+  if (Object.keys(ruleProviders.ip_rule_providers).length > 0) {
+    config['rule-providers'] = {
+      ...config['rule-providers'],
+      ...ruleProviders.ip_rule_providers
+    };
+  }
+
+  // 生成规则
+  const rules = [
+    // 自定义域名规则
+    ...CUSTOM_DOMAINS.map(domain => `DOMAIN,${domain},🚀 节点选择`),
+    // 其他规则
+    'GEOIP,CN,DIRECT',
+    'MATCH,🚀 节点选择'
+  ];
+
+  config.rules = rules;
+
+  return config;
+}
+
+/**
+ * 生成完整的 Sing-box 配置
+ */
+export function generateSingBoxConfig(selectedRules = [], customRules = [], nodes = []) {
+  const ruleSets = generateRuleSets(selectedRules, customRules);
+  
+  const config = {
+    ...SING_BOX_CONFIG,
+    outbounds: [
+      ...SING_BOX_CONFIG.outbounds,
+      ...PROXY_NODES,
+      ...nodes
+    ],
+    route: {
+      ...SING_BOX_CONFIG.route,
+      rule_set: [
+        ...SING_BOX_CONFIG.route.rule_set,
+        ...ruleSets.site_rule_sets,
+        ...ruleSets.ip_rule_sets
+      ],
+      rules: generateRules(selectedRules, customRules)
+    }
+  };
+
+  return config;
+}
+
 // Configuration templates
 export const SING_BOX_CONFIG = Object.freeze({
   dns: {
@@ -659,5 +772,10 @@ export default {
   getOutbounds,
   SING_BOX_CONFIG,
   CLASH_CONFIG,
-  SURGE_CONFIG
+  SURGE_CONFIG,
+  // 新增导出
+  PROXY_NODES,
+  CUSTOM_DOMAINS,
+  generateClashConfig,
+  generateSingBoxConfig
 };
