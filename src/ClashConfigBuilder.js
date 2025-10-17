@@ -28,7 +28,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         const commonFields = {
             name: proxy.tag || proxy.name || 'Unnamed Proxy',
             server: proxy.server || 'localhost',
-            port: proxy.server_port || 0,
+            port: proxy.server_port || 443,  // 默认端口改为 443
         };
 
         switch (proxy.type.toLowerCase()) {
@@ -47,8 +47,8 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     uuid: proxy.uuid || '',
                     alterId: proxy.alter_id || 0,
                     cipher: proxy.security || 'auto',
-                    tls: !!proxy.tls?.enabled,
-                    servername: proxy.tls?.server_name || '',
+                    tls: proxy.tls?.enabled ?? true,  // 默认启用 TLS
+                    servername: proxy.tls?.server_name || commonFields.server,
                     'skip-cert-verify': !!proxy.tls?.insecure,
                     network: proxy.transport?.type || 'tcp',
                     'ws-opts': proxy.transport?.type === 'ws' ? {
@@ -62,9 +62,9 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     type: 'vless',
                     uuid: proxy.uuid || '',
                     cipher: proxy.security || 'auto',
-                    tls: !!proxy.tls?.enabled,
-                    'client-fingerprint': proxy.tls?.utls?.fingerprint || '',
-                    servername: proxy.tls?.server_name || '',
+                    tls: proxy.tls?.enabled ?? true,  // 默认启用 TLS
+                    'client-fingerprint': proxy.tls?.utls?.fingerprint || 'chrome',  // 默认指纹 chrome
+                    servername: proxy.tls?.server_name || commonFields.server,  // 默认 servername 为 server 值
                     network: proxy.transport?.type || 'tcp',
                     'ws-opts': proxy.transport?.type === 'ws' ? {
                         path: proxy.transport.path || '/',
@@ -101,9 +101,9 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     type: 'trojan',
                     password: proxy.password || '',
                     cipher: proxy.security || 'auto',
-                    tls: !!proxy.tls?.enabled,
-                    'client-fingerprint': proxy.tls?.utls?.fingerprint || '',
-                    sni: proxy.tls?.server_name || '',
+                    tls: proxy.tls?.enabled ?? true,  // 默认启用 TLS
+                    'client-fingerprint': proxy.tls?.utls?.fingerprint || 'chrome',  // 默认指纹 chrome
+                    sni: proxy.tls?.server_name || commonFields.server,
                     network: proxy.transport?.type || 'tcp',
                     'ws-opts': proxy.transport?.type === 'ws' ? {
                         path: proxy.transport.path || '/',
@@ -147,6 +147,12 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         // Convert proxy if needed
         const convertedProxy = this.convertProxy(proxy);
         if (!convertedProxy) return;
+
+        // Additional validation for port
+        if (convertedProxy.port <= 0 || convertedProxy.port > 65535) {
+            console.error(`Invalid port ${convertedProxy.port} for proxy ${convertedProxy.name}. Skipping.`);
+            return;
+        }
 
         // Find similar proxies by name
         const similarProxies = this.config.proxies.filter(p => p.name && p.name.includes(convertedProxy.name));
