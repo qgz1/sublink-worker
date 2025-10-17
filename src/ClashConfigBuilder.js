@@ -1,7 +1,7 @@
 import yaml from 'js-yaml';
 import { CLASH_CONFIG, generateRules, generateClashRuleSets, t } from './config.js';
 import { BaseConfigBuilder } from './BaseConfigBuilder.js';
-import { DeepCopy } from './utils.js';
+import { t } from './i18n/index.js';
 
 // 深度相等比较，推荐用lodash.isEqual，简化示例手写如下
 function isDeepEqual(obj1, obj2) {
