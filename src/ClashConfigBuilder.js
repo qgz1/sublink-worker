@@ -166,13 +166,13 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     }
 
     addNodeSelectGroup(proxyList) {
-        proxyList.unshift('DIRECT', 'REJECT', t('outboundNames.Auto Select'));
-        this.config['proxy-groups'].unshift({
-            type: 'select',
-            name: t('outboundNames.Node Select'),
-            proxies: proxyList
-        });
-    }
+    proxyList.unshift(t('outboundNames.Auto Select'), 'REJECT', 'DIRECT');
+    this.config['proxy-groups'].unshift({
+        type: 'select',
+        name: t('outboundNames.Node Select'),
+        proxies: proxyList
+    });
+}
 
     addOutboundGroups(outbounds, proxyList) {
         outbounds.forEach(outbound => {
