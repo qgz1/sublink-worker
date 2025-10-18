@@ -6,9 +6,7 @@ import { t } from './i18n/index.js';
 
 export class ClashConfigBuilder extends BaseConfigBuilder {
     constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent) {
-        if (!baseConfig) {
-            baseConfig = CLASH_CONFIG;
-        }
+        if (!baseConfig) baseConfig = CLASH_CONFIG;
         super(inputString, baseConfig, lang, userAgent);
         this.selectedRules = selectedRules;
         this.customRules = customRules;
@@ -23,7 +21,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     }
 
     convertProxy(proxy) {
-        switch(proxy.type) {
+        switch (proxy.type) {
             case 'shadowsocks':
                 return {
                     name: proxy.tag,
@@ -66,7 +64,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     'ws-opts': proxy.transport?.type === 'ws' ? {
                         path: proxy.transport.path,
                         headers: proxy.transport.headers
-                    }: undefined,
+                    } : undefined,
                     'reality-opts': proxy.tls.reality?.enabled ? {
                         'public-key': proxy.tls.reality.public_key,
                         'short-id': proxy.tls.reality.short_id,
@@ -74,7 +72,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     'grpc-opts': proxy.transport?.type === 'grpc' ? {
                         'grpc-service-name': proxy.transport.service_name,
                     } : undefined,
-                    tfo : proxy.tcp_fast_open,
+                    tfo: proxy.tcp_fast_open,
                     'skip-cert-verify': proxy.tls.insecure,
                     'flow': proxy.flow ?? undefined,
                 };
@@ -109,7 +107,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     'ws-opts': proxy.transport?.type === 'ws' ? {
                         path: proxy.transport.path,
                         headers: proxy.transport.headers
-                    }: undefined,
+                    } : undefined,
                     'reality-opts': proxy.tls.reality?.enabled ? {
                         'public-key': proxy.tls.reality.public_key,
                         'short-id': proxy.tls.reality.short_id,
@@ -117,7 +115,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     'grpc-opts': proxy.transport?.type === 'grpc' ? {
                         'grpc-service-name': proxy.transport.service_name,
                     } : undefined,
-                    tfo : proxy.tcp_fast_open,
+                    tfo: proxy.tcp_fast_open,
                     'skip-cert-verify': proxy.tls.insecure,
                     'flow': proxy.flow ?? undefined,
                 };
@@ -145,7 +143,6 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.config.proxies = this.config.proxies || [];
 
         const similarProxies = this.config.proxies.filter(p => p.name.includes(proxy.name));
-
         const isIdentical = similarProxies.some(p => {
             const { name: _, ...restOfProxy } = proxy;
             const { name: __, ...restOfP } = p;
@@ -161,9 +158,11 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.config.proxies.push(proxy);
     }
 
-    // ✅ 优化出站策略：分地区测速 + 智能节点组织
+    // ✅ 优化自动测速组：地区+全局，仅生成一次
     addAutoSelectGroup(proxyList) {
         this.config['proxy-groups'] = this.config['proxy-groups'] || [];
+
+        if (this.config['proxy-groups'].some(g => g.name === t('outboundNames.Auto Select'))) return;
 
         const regions = {
             "🇭🇰 香港自动": proxyList.filter(p => /HK|Hong|香港/i.test(p)),
@@ -194,6 +193,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         });
     }
 
+    // ✅ 节点选择组，包含地区测速组
     addNodeSelectGroup(proxyList) {
         const autoSelectName = t('outboundNames.Auto Select');
         proxyList.unshift(autoSelectName, 'DIRECT', 'REJECT');
@@ -210,23 +210,30 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         });
     }
 
+    // ✅ 出站组优化 + 去重
     addOutboundGroups(outbounds, proxyList) {
+        const autoSelect = t('outboundNames.Auto Select');
+        const nodeSelect = t('outboundNames.Node Select');
+
         outbounds.forEach(outbound => {
             const outboundName = t(`outboundNames.${outbound}`);
 
-            if (outboundName !== t('outboundNames.Node Select')) {
-                const baseProxies = [
-                    t('outboundNames.Node Select'),
-                    t('outboundNames.Auto Select'),
+            if (outboundName !== nodeSelect) {
+                let optimizedProxies = [
+                    nodeSelect,
+                    autoSelect,
+                    'DIRECT',
+                    'REJECT',
                     ...proxyList
                 ];
 
-                let optimizedProxies = baseProxies;
                 if (/media|stream|video|youtube|netflix/i.test(outbound)) {
-                    optimizedProxies = ['🇭🇰 香港自动', '🇸🇬 新加坡自动', ...baseProxies];
+                    optimizedProxies.unshift('🇭🇰 香港自动', '🇸🇬 新加坡自动');
                 } else if (/openai|chatgpt|ai/i.test(outbound)) {
-                    optimizedProxies = ['🇸🇬 新加坡自动', '🇺🇸 美国自动', ...baseProxies];
+                    optimizedProxies.unshift('🇸🇬 新加坡自动', '🇺🇸 美国自动');
                 }
+
+                optimizedProxies = [...new Set(optimizedProxies)];
 
                 this.config['proxy-groups'].push({
                     type: "select",
@@ -249,6 +256,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         }
     }
 
+    // ✅ fallback 优化为测速型 fallback
     addFallBackGroup(proxyList) {
         this.config['proxy-groups'].push({
             type: "fallback",
@@ -268,40 +276,36 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         const ruleResults = [];
 
         const { site_rule_providers, ip_rule_providers } = generateClashRuleSets(this.selectedRules, this.customRules);
-
-        this.config['rule-providers'] = {
-            ...site_rule_providers,
-            ...ip_rule_providers
-        };
+        this.config['rule-providers'] = { ...site_rule_providers, ...ip_rule_providers };
 
         rules.filter(rule => !!rule.domain_suffix || !!rule.domain_keyword).map(rule => {
             rule.domain_suffix.forEach(suffix => {
-                ruleResults.push(`DOMAIN-SUFFIX,${suffix},${t('outboundNames.'+ rule.outbound)}`);
+                ruleResults.push(`DOMAIN-SUFFIX,${suffix},${t('outboundNames.' + rule.outbound)}`);
             });
             rule.domain_keyword.forEach(keyword => {
-                ruleResults.push(`DOMAIN-KEYWORD,${keyword},${t('outboundNames.'+ rule.outbound)}`);
+                ruleResults.push(`DOMAIN-KEYWORD,${keyword},${t('outboundNames.' + rule.outbound)}`);
             });
         });
 
         rules.filter(rule => !!rule.site_rules[0]).map(rule => {
             rule.site_rules.forEach(site => {
-                ruleResults.push(`RULE-SET,${site},${t('outboundNames.'+ rule.outbound)}`);
+                ruleResults.push(`RULE-SET,${site},${t('outboundNames.' + rule.outbound)}`);
             });
         });
 
         rules.filter(rule => !!rule.ip_rules[0]).map(rule => {
             rule.ip_rules.forEach(ip => {
-                ruleResults.push(`RULE-SET,${ip},${t('outboundNames.'+ rule.outbound)},no-resolve`);
+                ruleResults.push(`RULE-SET,${ip},${t('outboundNames.' + rule.outbound)},no-resolve`);
             });
         });
 
         rules.filter(rule => !!rule.ip_cidr).map(rule => {
             rule.ip_cidr.forEach(cidr => {
-                ruleResults.push(`IP-CIDR,${cidr},${t('outboundNames.'+ rule.outbound)},no-resolve`);
+                ruleResults.push(`IP-CIDR,${cidr},${t('outboundNames.' + rule.outbound)},no-resolve`);
             });
         });
 
-        this.config.rules = [...ruleResults]
+        this.config.rules = [...ruleResults];
         this.config.rules.push(`MATCH,${t('outboundNames.Fall Back')}`);
 
         return yaml.dump(this.config);
