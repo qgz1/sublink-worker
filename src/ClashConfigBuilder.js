@@ -1,5 +1,5 @@
 import yaml from 'js-yaml';
-import { CLASH_CONFIG, generateRules, generateClashRuleSets } from './config.js';
+import { CLASH_CONFIG, generateRules, generateClashRuleSets, getOutbounds, PREDEFINED_RULE_SETS } from './config.js';
 import { BaseConfigBuilder } from './BaseConfigBuilder.js';
 import { DeepCopy } from './utils.js';
 import { t } from './i18n/index.js';
@@ -142,48 +142,41 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     addProxyToConfig(proxy) {
         this.config.proxies = this.config.proxies || [];
         const similarProxies = this.config.proxies.filter(p => p.name.includes(proxy.name));
+
         const isIdentical = similarProxies.some(p => {
-            const { name: _, ...r1 } = proxy;
-            const { name: __, ...r2 } = p;
-            return JSON.stringify(r1) === JSON.stringify(r2);
+            const { name: _, ...rest1 } = proxy;
+            const { name: __, ...rest2 } = p;
+            return JSON.stringify(rest1) === JSON.stringify(rest2);
         });
+
         if (isIdentical) return;
         if (similarProxies.length > 0) proxy.name = `${proxy.name} ${similarProxies.length + 1}`;
+
         this.config.proxies.push(proxy);
     }
 
-    // ✅ 自动选择优化（过滤广告节点 + 防重复）
     addAutoSelectGroup(proxyList) {
         const autoName = t('outboundNames.Auto Select');
         if (this.config['proxy-groups']?.some(g => g.name === autoName)) return;
-
-        const clean = proxyList.filter(
-            n => !/剩余|套餐|倍率|官网/i.test(n)
-        );
 
         this.config['proxy-groups'] = this.config['proxy-groups'] || [];
         this.config['proxy-groups'].push({
             name: autoName,
             type: 'url-test',
-            proxies: DeepCopy(clean),
-            url: 'https://cp.cloudflare.com/generate_204',
+            proxies: DeepCopy(proxyList),
+            url: 'https://www.gstatic.com/generate_204',
             interval: 300,
-            tolerance: 50,
-            lazy: true
+            lazy: false
         });
     }
 
-    // ✅ 节点选择优化（过滤广告节点 + 限制数量）
     addNodeSelectGroup(proxyList) {
         const autoSelect = t('outboundNames.Auto Select');
         const nodeSelect = t('outboundNames.Node Select');
+
+        const merged = new Set([autoSelect, 'DIRECT', 'REJECT', ...proxyList]);
         if (this.config['proxy-groups']?.some(g => g.name === nodeSelect)) return;
 
-        const clean = proxyList
-            .filter(n => !/剩余|套餐|倍率|官网/i.test(n))
-            .slice(0, 30);
-
-        const merged = new Set([autoSelect, 'DIRECT', 'REJECT', ...clean]);
         this.config['proxy-groups'].unshift({
             type: "select",
             name: nodeSelect,
@@ -191,45 +184,73 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         });
     }
 
-    // ✅ 出站策略优化：国内直连，其余保留智能选择
     addOutboundGroups(outbounds, proxyList) {
         const autoSelect = t('outboundNames.Auto Select');
         const nodeSelect = t('outboundNames.Node Select');
-        const clean = proxyList.filter(n => !/剩余|套餐|倍率|官网/i.test(n));
 
         outbounds.forEach(outbound => {
             const outboundName = t(`outboundNames.${outbound}`);
-            if (outboundName === nodeSelect) return;
 
-            let base = ['DIRECT'];
+            if (outboundName !== nodeSelect) {
+                let optimized;
 
-            if (!/国内服务|🔒 国内服务/.test(outboundName)) {
-                base = Array.from(new Set([
-                    nodeSelect,
-                    autoSelect,
-                    'DIRECT',
-                    'REJECT',
-                    ...clean
-                ]));
+                // ✅ 国内服务仅保留直连
+                if (outboundName === t('outboundNames.国内服务') || outboundName === '🔒 国内服务') {
+                    optimized = ['DIRECT'];
+                } else {
+                    optimized = new Set([
+                        nodeSelect,
+                        autoSelect,
+                        'DIRECT',
+                        'REJECT',
+                        ...proxyList
+                    ]);
+
+                    if (/media|stream|video|youtube|netflix/i.test(outbound)) {
+                        optimized = new Set(['🇭🇰 香港自动', '🇸🇬 新加坡自动', ...optimized]);
+                    } else if (/openai|chatgpt|ai/i.test(outbound)) {
+                        optimized = new Set(['🇸🇬 新加坡自动', '🇺🇸 美国自动', ...optimized]);
+                    }
+                }
+
+                this.config['proxy-groups'].push({
+                    type: "select",
+                    name: outboundName,
+                    proxies: DeepCopy([...optimized])
+                });
             }
-
-            this.config['proxy-groups'].push({
-                type: 'select',
-                name: outboundName,
-                proxies: DeepCopy(base)
-            });
         });
     }
 
-    // ✅ fallback 优化
+    addCustomRuleGroups(proxyList) {
+        if (Array.isArray(this.customRules)) {
+            this.customRules.forEach(rule => {
+                this.config['proxy-groups'].push({
+                    type: "select",
+                    name: t(`outboundNames.${rule.name}`),
+                    proxies: [t('outboundNames.Node Select'), ...proxyList]
+                });
+            });
+        }
+    }
+
+    // ✅ 修正版 Fallback（防止🐟漏网之鱼超时）
     addFallBackGroup(proxyList) {
-        const clean = proxyList.filter(n => !/剩余|套餐|倍率|官网/i.test(n));
+        const clean = proxyList.filter(n =>
+          !n.includes('剩余') && !n.includes('套餐') && !n.includes('倍率') && !n.includes('官网')
+        );
+
+        const nodeSelect = t('outboundNames.Node Select');
+        const autoSelect = t('outboundNames.Auto Select');
+
         this.config['proxy-groups'].push({
             name: t('outboundNames.Fall Back'),
             type: 'fallback',
-            proxies: [t('outboundNames.Node Select'), ...clean],
-            url: 'https://cp.cloudflare.com/generate_204',
-            interval: 300
+            proxies: [nodeSelect, autoSelect, 'DIRECT', ...clean],
+            url: 'https://www.gstatic.com/generate_204',
+            interval: 300,
+            tolerance: 50,
+            lazy: true
         });
     }
 
@@ -263,6 +284,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
 
         this.config.rules = [...ruleResults];
         this.config.rules.push(`MATCH,${t('outboundNames.Fall Back')}`);
+
         return yaml.dump(this.config);
     }
 }
