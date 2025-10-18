@@ -137,65 +137,101 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     'udp-relay-mode': 'native',
                 };
             default:
-                return proxy; // Return as-is if no specific conversion is defined
+                return proxy;
         }
     }
 
     addProxyToConfig(proxy) {
         this.config.proxies = this.config.proxies || [];
-    
-        // Find proxies with the same or partially matching name
+
         const similarProxies = this.config.proxies.filter(p => p.name.includes(proxy.name));
-    
-        // Check if there is a proxy with identical data excluding the 'name' field
+
         const isIdentical = similarProxies.some(p => {
-            const { name: _, ...restOfProxy } = proxy; // Exclude the 'name' attribute
-            const { name: __, ...restOfP } = p;       // Exclude the 'name' attribute
+            const { name: _, ...restOfProxy } = proxy;
+            const { name: __, ...restOfP } = p;
             return JSON.stringify(restOfProxy) === JSON.stringify(restOfP);
         });
-    
-        if (isIdentical) {
-            // If there is a proxy with identical data, skip adding it
-            return;
-        }
-    
-        // If there are proxies with similar names but different data, modify the name
+
+        if (isIdentical) return;
+
         if (similarProxies.length > 0) {
             proxy.name = `${proxy.name} ${similarProxies.length + 1}`;
         }
-    
-        // Add the proxy to the configuration
+
         this.config.proxies.push(proxy);
     }
 
+    // ✅ 优化出站策略：分地区测速 + 智能节点组织
     addAutoSelectGroup(proxyList) {
         this.config['proxy-groups'] = this.config['proxy-groups'] || [];
+
+        const regions = {
+            "🇭🇰 香港自动": proxyList.filter(p => /HK|Hong|香港/i.test(p)),
+            "🇸🇬 新加坡自动": proxyList.filter(p => /SG|Singapore|新加坡/i.test(p)),
+            "🇺🇸 美国自动": proxyList.filter(p => /US|United|美/i.test(p))
+        };
+
+        Object.entries(regions).forEach(([regionName, regionProxies]) => {
+            if (regionProxies.length > 0) {
+                this.config['proxy-groups'].push({
+                    name: regionName,
+                    type: 'url-test',
+                    proxies: DeepCopy(regionProxies),
+                    url: 'https://www.gstatic.com/generate_204',
+                    interval: 300,
+                    lazy: true
+                });
+            }
+        });
+
         this.config['proxy-groups'].push({
             name: t('outboundNames.Auto Select'),
             type: 'url-test',
             proxies: DeepCopy(proxyList),
             url: 'https://www.gstatic.com/generate_204',
             interval: 300,
-            lazy: false
+            lazy: true
         });
     }
 
     addNodeSelectGroup(proxyList) {
-        proxyList.unshift(t('outboundNames.Auto Select'), 'DIRECT', 'REJECT');
+        const autoSelectName = t('outboundNames.Auto Select');
+        proxyList.unshift(autoSelectName, 'DIRECT', 'REJECT');
+
+        const regionGroups = ['🇭🇰 香港自动', '🇸🇬 新加坡自动', '🇺🇸 美国自动']
+            .filter(r => this.config['proxy-groups']?.some(g => g.name === r));
+
+        const mergedProxies = [...regionGroups, ...proxyList];
+
         this.config['proxy-groups'].unshift({
             type: "select",
             name: t('outboundNames.Node Select'),
-            proxies: proxyList
+            proxies: DeepCopy(mergedProxies)
         });
     }
 
     addOutboundGroups(outbounds, proxyList) {
         outbounds.forEach(outbound => {
-            if (outbound !== t('outboundNames.Node Select')) {
+            const outboundName = t(`outboundNames.${outbound}`);
+
+            if (outboundName !== t('outboundNames.Node Select')) {
+                const baseProxies = [
+                    t('outboundNames.Node Select'),
+                    t('outboundNames.Auto Select'),
+                    ...proxyList
+                ];
+
+                let optimizedProxies = baseProxies;
+                if (/media|stream|video|youtube|netflix/i.test(outbound)) {
+                    optimizedProxies = ['🇭🇰 香港自动', '🇸🇬 新加坡自动', ...baseProxies];
+                } else if (/openai|chatgpt|ai/i.test(outbound)) {
+                    optimizedProxies = ['🇸🇬 新加坡自动', '🇺🇸 美国自动', ...baseProxies];
+                }
+
                 this.config['proxy-groups'].push({
                     type: "select",
-                    name: t(`outboundNames.${outbound}`),
-                    proxies: [t('outboundNames.Node Select'), ...proxyList]
+                    name: outboundName,
+                    proxies: DeepCopy(optimizedProxies)
                 });
             }
         });
@@ -215,13 +251,14 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
 
     addFallBackGroup(proxyList) {
         this.config['proxy-groups'].push({
-            type: "select",
+            type: "fallback",
             name: t('outboundNames.Fall Back'),
-            proxies: [t('outboundNames.Node Select'), ...proxyList]
+            proxies: [t('outboundNames.Node Select'), t('outboundNames.Auto Select'), ...proxyList],
+            url: 'https://www.gstatic.com/generate_204',
+            interval: 300
         });
     }
 
-    // 生成规则
     generateRules() {
         return generateRules(this.selectedRules, this.customRules);
     }
@@ -229,19 +266,13 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     formatConfig() {
         const rules = this.generateRules();
         const ruleResults = [];
-        
-        // 获取.mrs规则集配置
+
         const { site_rule_providers, ip_rule_providers } = generateClashRuleSets(this.selectedRules, this.customRules);
-        
-        // 添加规则集提供者
+
         this.config['rule-providers'] = {
             ...site_rule_providers,
             ...ip_rule_providers
         };
-
-        // 使用RULE-SET规则格式替代原有的GEOSITE/GEOIP
-        // Rule-Set & Domain-Set:  To reduce DNS leaks and unnecessary DNS queries,
-        // domain & non-IP rules must precede IP rules
 
         rules.filter(rule => !!rule.domain_suffix || !!rule.domain_keyword).map(rule => {
             rule.domain_suffix.forEach(suffix => {
@@ -271,7 +302,6 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         });
 
         this.config.rules = [...ruleResults]
-
         this.config.rules.push(`MATCH,${t('outboundNames.Fall Back')}`);
 
         return yaml.dump(this.config);
