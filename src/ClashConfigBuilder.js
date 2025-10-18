@@ -234,7 +234,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         }
     }
 
-    // ✅ 修正版 Fallback（防止🐟漏网之鱼超时）
+    // ✅ 智能自动切换 fallback（失效自动换节点 + 健康检测）
     addFallBackGroup(proxyList) {
         const clean = proxyList.filter(n =>
           !n.includes('剩余') && !n.includes('套餐') && !n.includes('倍率') && !n.includes('官网')
@@ -248,9 +248,10 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
             type: 'fallback',
             proxies: [nodeSelect, autoSelect, 'DIRECT', ...clean],
             url: 'https://www.gstatic.com/generate_204',
-            interval: 300,
-            tolerance: 50,
-            lazy: true
+            interval: 180,     // 每 180 秒检测一次
+            tolerance: 100,    // 延迟容忍度
+            lazy: true,        // 懒测速：请求时才测速
+            'max-failed-times': 2 // 连续失败自动切换
         });
     }
 
