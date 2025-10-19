@@ -212,18 +212,6 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     } else if (/openai|chatgpt|ai/i.test(outbound)) {
                         optimized = new Set(['🇸🇬 新加坡自动', '🇺🇸 美国自动', ...optimized]);
                     }
-                    // 新增优化：游戏服务
-                    else if (/game|gaming|steam/i.test(outbound)) {
-                        optimized = new Set(['🇭🇰 香港自动', '🇯🇵 日本自动', ...optimized]);
-                    }
-                    // 新增优化：下载服务
-                    else if (/download|torrent|p2p/i.test(outbound)) {
-                        optimized = new Set(['🇸🇬 新加坡自动', '🇯🇵 日本自动', ...optimized]);
-                    }
-                    // 新增优化：社交媒体
-                    else if (/social|twitter|facebook|telegram/i.test(outbound)) {
-                        optimized = new Set(['🇭🇰 香港自动', '🇸🇬 新加坡自动', ...optimized]);
-                    }
                 }
 
                 this.config['proxy-groups'].push({
