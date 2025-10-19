@@ -21,36 +21,60 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     }
 
     convertProxy(proxy) {
-        // 保留原 convertProxy 逻辑
-        return proxy; // 简化版，如果需要保留详细类型转换可直接复用原函数
+        switch (proxy.type) {
+            case 'shadowsocks':
+                return {
+                    name: proxy.tag,
+                    type: 'ss',
+                    server: proxy.server,
+                    port: proxy.server_port,
+                    cipher: proxy.method,
+                    password: proxy.password
+                };
+            case 'vmess':
+            case 'vless':
+            case 'trojan':
+            case 'hysteria2':
+            case 'tuic':
+                return { ...proxy }; // 复杂节点保留原结构，可根据需要自定义
+            default:
+                return proxy;
+        }
     }
 
     addProxyToConfig(proxy) {
         this.config.proxies = this.config.proxies || [];
-        const similarProxies = this.config.proxies.filter(p => p.name.includes(proxy.name));
-
-        const isIdentical = similarProxies.some(p => {
+        const similar = this.config.proxies.filter(p => p.name.includes(proxy.name));
+        const isIdentical = similar.some(p => {
             const { name: _, ...rest1 } = proxy;
             const { name: __, ...rest2 } = p;
             return JSON.stringify(rest1) === JSON.stringify(rest2);
         });
-
         if (isIdentical) return;
-        if (similarProxies.length > 0) proxy.name = `${proxy.name} ${similarProxies.length + 1}`;
-
+        if (similar.length > 0) proxy.name = `${proxy.name} ${similar.length + 1}`;
         this.config.proxies.push(proxy);
+    }
+
+    // 过滤节点，去掉私有网络及不必要节点
+    cleanProxyList(proxyList) {
+        return proxyList.filter(n =>
+            this.config.proxies.some(p => p.name === n) &&
+            !n.includes('私有网络') &&
+            !n.includes('剩余') &&
+            !n.includes('套餐') &&
+            !n.includes('倍率') &&
+            !n.includes('官网')
+        );
     }
 
     addAutoSelectGroup(proxyList) {
         const autoName = t('outboundNames.Auto Select');
         if (this.config['proxy-groups']?.some(g => g.name === autoName)) return;
-
-        const cleanList = proxyList.filter(n => !n.includes('私有网络'));
         this.config['proxy-groups'] = this.config['proxy-groups'] || [];
         this.config['proxy-groups'].push({
             name: autoName,
             type: 'url-test',
-            proxies: DeepCopy(cleanList),
+            proxies: DeepCopy(this.cleanProxyList(proxyList)),
             url: 'https://www.gstatic.com/generate_204',
             interval: 300,
             lazy: false
@@ -60,11 +84,8 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     addNodeSelectGroup(proxyList) {
         const autoSelect = t('outboundNames.Auto Select');
         const nodeSelect = t('outboundNames.Node Select');
-
-        const cleanList = proxyList.filter(n => !n.includes('私有网络'));
-        const merged = new Set([autoSelect, 'DIRECT', 'REJECT', ...cleanList]);
+        const merged = new Set([autoSelect, 'DIRECT', 'REJECT', ...this.cleanProxyList(proxyList)]);
         if (this.config['proxy-groups']?.some(g => g.name === nodeSelect)) return;
-
         this.config['proxy-groups'].unshift({
             type: "select",
             name: nodeSelect,
@@ -72,56 +93,50 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         });
     }
 
+    addFallBackGroup(proxyList) {
+        this.config['proxy-groups'].push({
+            type: "select",
+            name: t('outboundNames.Fall Back'),
+            proxies: [t('outboundNames.Node Select'), ...this.cleanProxyList(proxyList)]
+        });
+    }
+
     addOutboundGroups(outbounds, proxyList) {
         const autoSelect = t('outboundNames.Auto Select');
         const nodeSelect = t('outboundNames.Node Select');
-
-        const cleanList = proxyList.filter(n => !n.includes('私有网络'));
+        const cleaned = this.cleanProxyList(proxyList);
 
         outbounds.forEach(outbound => {
             const outboundName = t(`outboundNames.${outbound}`);
-            if (outboundName.includes('私有网络')) return; // 过滤私有网络
+            if (outboundName === nodeSelect) return;
 
             let optimized;
             if (outboundName === t('outboundNames.国内服务') || outboundName === '🔒 国内服务') {
                 optimized = ['DIRECT'];
+            } else if (/fallback|漏网之鱼/i.test(outbound)) {
+                optimized = [nodeSelect, autoSelect, 'DIRECT', ...cleaned];
             } else {
-                optimized = new Set([nodeSelect, autoSelect, 'DIRECT', 'REJECT', ...cleanList]);
-                if (/media|stream|video|youtube|netflix/i.test(outbound)) {
-                    optimized = new Set(['🇭🇰 香港自动', '🇸🇬 新加坡自动', ...optimized]);
-                } else if (/openai|chatgpt|ai/i.test(outbound)) {
-                    optimized = new Set(['🇸🇬 新加坡自动', '🇺🇸 美国自动', ...optimized]);
-                }
+                optimized = [nodeSelect, autoSelect, 'DIRECT', 'REJECT', ...cleaned];
             }
 
             this.config['proxy-groups'].push({
                 type: "select",
                 name: outboundName,
-                proxies: DeepCopy([...optimized])
+                proxies: DeepCopy(optimized)
             });
         });
     }
 
     addCustomRuleGroups(proxyList) {
         if (Array.isArray(this.customRules)) {
-            const cleanList = proxyList.filter(n => !n.includes('私有网络'));
             this.customRules.forEach(rule => {
                 this.config['proxy-groups'].push({
                     type: "select",
                     name: t(`outboundNames.${rule.name}`),
-                    proxies: [t('outboundNames.Node Select'), ...cleanList]
+                    proxies: [t('outboundNames.Node Select'), ...this.cleanProxyList(proxyList)]
                 });
             });
         }
-    }
-
-    addFallBackGroup(proxyList) {
-        const cleanList = proxyList.filter(n => !n.includes('私有网络'));
-        this.config['proxy-groups'].push({
-            type: "select",
-            name: t('outboundNames.Fall Back'),
-            proxies: [t('outboundNames.Node Select'), ...cleanList]
-        });
     }
 
     generateRules() {
