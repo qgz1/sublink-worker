@@ -9,6 +9,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     super(inputString, baseConfig || CLASH_CONFIG, lang, userAgent);
     this.selectedRules = selectedRules;
     this.customRules = customRules;
+    this.config['proxy-groups'] = this.config['proxy-groups'] || [];
   }
 
   /** 获取代理列表 */
@@ -20,49 +21,40 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
   addProxyToConfig(proxy) {
     this.config.proxies = this.config.proxies || [];
     const similar = this.config.proxies.filter(p => p.name.includes(proxy.name));
-
     const isSame = similar.some(p => {
       const { name: _, ...a } = proxy;
       const { name: __, ...b } = p;
       return JSON.stringify(a) === JSON.stringify(b);
     });
-
     if (isSame) return;
     if (similar.length > 0) proxy.name += ` ${similar.length + 1}`;
     this.config.proxies.push(proxy);
   }
 
-  /** 添加自动选择组 */
+  /** 自动选择组 */
   addAutoSelectGroup(proxyList) {
     const name = t('outboundNames.Auto Select');
-    if (this.config['proxy-groups']?.some(g => g.name === name)) return;
+    if (this.config['proxy-groups'].some(g => g.name === name)) return;
 
-    const clean = proxyList.filter(n =>
-      !n.includes('剩余') && !n.includes('套餐') && !n.includes('倍率') && !n.includes('官网')
-    );
-
+    const clean = proxyList.filter(n => !n.match(/剩余|套餐|倍率|官网/));
     this.config['proxy-groups'].push({
       name,
       type: 'url-test',
       proxies: DeepCopy(clean),
-      url: 'https://cp.cloudflare.com/generate_204',
+      url: 'https://www.gstatic.com/generate_204',
       interval: 300,
       tolerance: 50,
       lazy: true
     });
   }
 
-  /** 添加节点选择组 */
+  /** 节点选择组 */
   addNodeSelectGroup(proxyList) {
     const auto = t('outboundNames.Auto Select');
     const node = t('outboundNames.Node Select');
+    if (this.config['proxy-groups'].some(g => g.name === node)) return;
 
-    if (this.config['proxy-groups']?.some(g => g.name === node)) return;
-
-    const clean = proxyList.filter(n =>
-      !n.includes('剩余') && !n.includes('套餐') && !n.includes('倍率') && !n.includes('官网')
-    );
-
+    const clean = proxyList.filter(n => !n.match(/剩余|套餐|倍率|官网/));
     const merged = [auto, 'DIRECT', 'REJECT', ...clean.slice(0, 20)];
 
     this.config['proxy-groups'].unshift({
@@ -72,18 +64,17 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     });
   }
 
-  /** 添加出站策略分组（国内 / 国外 / Fallback） */
+  /** 出站分组 */
   addOutboundGroups(outbounds, proxyList) {
     const auto = t('outboundNames.Auto Select');
     const node = t('outboundNames.Node Select');
-    const clean = proxyList.filter(n =>
-      !n.includes('剩余') && !n.includes('套餐') && !n.includes('倍率') && !n.includes('官网')
-    );
+    const clean = proxyList.filter(n => !n.match(/剩余|套餐|倍率|官网/));
 
     outbounds.forEach(outbound => {
       const name = t(`outboundNames.${outbound}`);
-      let base = [];
+      if (this.config['proxy-groups'].some(g => g.name === name)) return;
 
+      let base = [];
       if (/国内服务|🔒 国内服务/.test(name)) {
         base = ['DIRECT'];
       } else if (/fallback|漏网之鱼/i.test(outbound)) {
@@ -103,9 +94,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
   /** 自定义规则组 */
   addCustomRuleGroups(proxyList) {
     if (!Array.isArray(this.customRules)) return;
-    const clean = proxyList.filter(n =>
-      !n.includes('剩余') && !n.includes('套餐') && !n.includes('倍率') && !n.includes('官网')
-    );
+    const clean = proxyList.filter(n => !n.match(/剩余|套餐|倍率|官网/));
     this.customRules.forEach(rule => {
       this.config['proxy-groups'].push({
         type: 'select',
@@ -115,12 +104,12 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     });
   }
 
-  /** Fallback 漏网之鱼 */
+  /** 漏网之鱼 fallback */
   addFallBackGroup(proxyList) {
     const name = t('outboundNames.Fall Back');
-    const clean = proxyList.filter(n =>
-      !n.includes('剩余') && !n.includes('套餐') && !n.includes('倍率') && !n.includes('官网')
-    );
+    if (this.config['proxy-groups'].some(g => g.name === name)) return;
+
+    const clean = proxyList.filter(n => !n.match(/剩余|套餐|倍率|官网/));
     this.config['proxy-groups'].push({
       name,
       type: 'fallback',
@@ -133,7 +122,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     return generateRules(this.selectedRules, this.customRules);
   }
 
-  /** 最终输出 */
+  /** 输出最终配置 */
   formatConfig() {
     const rules = this.generateRules();
     const results = [];
