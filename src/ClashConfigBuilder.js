@@ -191,11 +191,6 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         outbounds.forEach(outbound => {
             const outboundName = t(`outboundNames.${outbound}`);
 
-            // 跳过"私有网络"分组
-            if (outboundName === t('outboundNames.私有网络') || outboundName === '私有网络') {
-                return;
-            }
-
             if (outboundName !== nodeSelect) {
                 let optimized;
 
@@ -242,7 +237,9 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     }
 
     generateRules() {
-        return generateRules(this.selectedRules, this.customRules);
+        const rules = generateRules(this.selectedRules, this.customRules);
+        // 过滤掉指向"私有网络"的规则
+        return rules.filter(rule => rule.outbound !== '私有网络');
     }
 
     formatConfig() {
@@ -253,35 +250,19 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.config['rule-providers'] = { ...site_rule_providers, ...ip_rule_providers };
 
         rules.filter(r => !!r.domain_suffix || !!r.domain_keyword).forEach(rule => {
-            // 跳过指向"私有网络"的规则
-            if (rule.outbound === '私有网络') {
-                return;
-            }
             rule.domain_suffix?.forEach(s => ruleResults.push(`DOMAIN-SUFFIX,${s},${t('outboundNames.' + rule.outbound)}`));
             rule.domain_keyword?.forEach(k => ruleResults.push(`DOMAIN-KEYWORD,${k},${t('outboundNames.' + rule.outbound)}`));
         });
 
         rules.filter(r => !!r.site_rules?.[0]).forEach(rule => {
-            // 跳过指向"私有网络"的规则
-            if (rule.outbound === '私有网络') {
-                return;
-            }
             rule.site_rules.forEach(s => ruleResults.push(`RULE-SET,${s},${t('outboundNames.' + rule.outbound)}`));
         });
 
         rules.filter(r => !!r.ip_rules?.[0]).forEach(rule => {
-            // 跳过指向"私有网络"的规则
-            if (rule.outbound === '私有网络') {
-                return;
-            }
             rule.ip_rules.forEach(ip => ruleResults.push(`RULE-SET,${ip},${t('outboundNames.' + rule.outbound)},no-resolve`));
         });
 
         rules.filter(r => !!r.ip_cidr).forEach(rule => {
-            // 跳过指向"私有网络"的规则
-            if (rule.outbound === '私有网络') {
-                return;
-            }
             rule.ip_cidr.forEach(cidr => ruleResults.push(`IP-CIDR,${cidr},${t('outboundNames.' + rule.outbound)},no-resolve`));
         });
 
