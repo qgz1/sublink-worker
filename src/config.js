@@ -42,7 +42,7 @@ export const UNIFIED_RULES = [
 	},
 	{
 		name: 'Private',
-		outbound: t('outboundNames.Private'),
+		outbound: 'DIRECT',  // 修改这里：从 t('outboundNames.Private') 改为 'DIRECT'
 		site_rules: [],
 		ip_rules: ['private']
 	},
@@ -124,10 +124,8 @@ export const PREDEFINED_RULE_SETS = {
 	minimal: ['Location:CN', 'Private', 'Non-China'],
 	balanced: ['Location:CN', 'Private', 'Non-China','Github', 'Google', 'Youtube', 'AI Services', 'Telegram'],
 	comprehensive: UNIFIED_RULES.map(rule => rule.name)
-  };
+};
   
-
-
 // Generate SITE_RULE_SETS and IP_RULE_SETS from UNIFIED_RULES
 export const SITE_RULE_SETS = UNIFIED_RULES.reduce((acc, rule) => {
 	rule.site_rules.forEach(site_rule => {
@@ -208,7 +206,6 @@ export function generateRules(selectedRules = [], customRules = []) {
 	return rules;
   }
 
-
 export function generateRuleSets(selectedRules = [], customRules = []) {
   if (typeof selectedRules === 'string' && PREDEFINED_RULE_SETS[selectedRules]) {
     selectedRules = PREDEFINED_RULE_SETS[selectedRules];
@@ -232,8 +229,6 @@ export function generateRuleSets(selectedRules = [], customRules = []) {
     }
   });
   
-
-
   const site_rule_sets = Array.from(siteRuleSets).map(rule => ({
     tag: rule,
     type: 'remote',
