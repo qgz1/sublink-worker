@@ -1,5 +1,5 @@
 import yaml from 'js-yaml';
-import { CLASH_CONFIG, generateRules, generateClashRuleSets } from './config.js';
+import { CLASH_CONFIG, generateRules, generateClashRuleSets, getOutbounds, PREDEFINED_RULE_SETS } from './config.js';
 import { BaseConfigBuilder } from './BaseConfigBuilder.js';
 import { DeepCopy } from './utils.js';
 import { t } from './i18n/index.js';
@@ -18,6 +18,17 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
 
     getProxyName(proxy) {
         return proxy.name;
+    }
+
+    // 私网节点过滤函数
+    filterPrivateNodes(proxyList) {
+        return proxyList.filter(n =>
+            !n.includes('剩余') &&
+            !n.includes('套餐') &&
+            !n.includes('倍率') &&
+            !n.includes('官网') &&
+            !/^127\.|^192\.168\.|^10\.|^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(n)
+        );
     }
 
     convertProxy(proxy) {
@@ -142,21 +153,26 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     addProxyToConfig(proxy) {
         this.config.proxies = this.config.proxies || [];
         const similarProxies = this.config.proxies.filter(p => p.name.includes(proxy.name));
+
         const isIdentical = similarProxies.some(p => {
             const { name: _, ...rest1 } = proxy;
             const { name: __, ...rest2 } = p;
             return JSON.stringify(rest1) === JSON.stringify(rest2);
         });
+
         if (isIdentical) return;
         if (similarProxies.length > 0) proxy.name = `${proxy.name} ${similarProxies.length + 1}`;
+
         this.config.proxies.push(proxy);
     }
 
     addAutoSelectGroup(proxyList) {
         const autoName = t('outboundNames.Auto Select');
         if (this.config['proxy-groups']?.some(g => g.name === autoName)) return;
+
+        const cleanList = this.filterPrivateNodes(proxyList);
+
         this.config['proxy-groups'] = this.config['proxy-groups'] || [];
-        const cleanList = proxyList.filter(n => !n.includes('剩余') && !n.includes('套餐') && !n.includes('倍率') && !n.includes('官网'));
         this.config['proxy-groups'].push({
             name: autoName,
             type: 'url-test',
@@ -170,9 +186,11 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     addNodeSelectGroup(proxyList) {
         const autoSelect = t('outboundNames.Auto Select');
         const nodeSelect = t('outboundNames.Node Select');
-        const cleanList = proxyList.filter(n => !n.includes('剩余') && !n.includes('套餐') && !n.includes('倍率') && !n.includes('官网'));
+
+        const cleanList = this.filterPrivateNodes(proxyList);
         const merged = new Set([autoSelect, 'DIRECT', 'REJECT', ...cleanList]);
         if (this.config['proxy-groups']?.some(g => g.name === nodeSelect)) return;
+
         this.config['proxy-groups'].unshift({
             type: "select",
             name: nodeSelect,
@@ -183,50 +201,56 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     addOutboundGroups(outbounds, proxyList) {
         const autoSelect = t('outboundNames.Auto Select');
         const nodeSelect = t('outboundNames.Node Select');
-        const cleanList = proxyList.filter(n => !n.includes('剩余') && !n.includes('套餐') && !n.includes('倍率') && !n.includes('官网'));
+        const cleanList = this.filterPrivateNodes(proxyList);
 
         outbounds.forEach(outbound => {
             const outboundName = t(`outboundNames.${outbound}`);
-            if (outboundName === nodeSelect) return;
-            let optimized;
 
-            if (outboundName === t('outboundNames.国内服务') || outboundName === '🔒 国内服务') {
-                optimized = ['DIRECT'];
-            } else if (/fallback|漏网之鱼/i.test(outbound)) {
-                optimized = new Set([nodeSelect, autoSelect, 'DIRECT', ...cleanList]);
-            } else {
-                optimized = new Set([nodeSelect, autoSelect, 'DIRECT', 'REJECT', ...cleanList]);
+            if (outboundName !== nodeSelect) {
+                let optimized;
 
-                if (/media|stream|video|youtube|netflix/i.test(outbound)) {
-                    optimized = new Set(['🇭🇰 香港自动', '🇸🇬 新加坡自动', ...optimized]);
+                if (outboundName === t('outboundNames.国内服务') || outboundName === '🔒 国内服务') {
+                    optimized = ['DIRECT'];
+                } else {
+                    optimized = new Set([
+                        nodeSelect,
+                        autoSelect,
+                        'DIRECT',
+                        'REJECT',
+                        ...cleanList
+                    ]);
+
+                    if (/media|stream|video|youtube|netflix/i.test(outbound)) {
+                        optimized = new Set(['🇭🇰 香港自动', '🇸🇬 新加坡自动', ...optimized]);
+                    } else if (/openai|chatgpt|ai/i.test(outbound)) {
+                        optimized = new Set(['🇸🇬 新加坡自动', '🇺🇸 美国自动', ...optimized]);
+                    }
                 }
-                if (/openai|chatgpt|ai/i.test(outbound)) {
-                    optimized = new Set(['🇸🇬 新加坡自动', '🇺🇸 美国自动', ...optimized]);
-                }
+
+                this.config['proxy-groups'].push({
+                    type: "select",
+                    name: outboundName,
+                    proxies: DeepCopy([...optimized])
+                });
             }
-
-            this.config['proxy-groups'].push({
-                type: "select",
-                name: outboundName,
-                proxies: DeepCopy([...optimized])
-            });
         });
     }
 
     addCustomRuleGroups(proxyList) {
-        if (!Array.isArray(this.customRules)) return;
-        const cleanList = proxyList.filter(n => !n.includes('剩余') && !n.includes('套餐') && !n.includes('倍率') && !n.includes('官网'));
-        this.customRules.forEach(rule => {
-            this.config['proxy-groups'].push({
-                type: "select",
-                name: t(`outboundNames.${rule.name}`),
-                proxies: [t('outboundNames.Node Select'), ...cleanList]
+        if (Array.isArray(this.customRules)) {
+            const cleanList = this.filterPrivateNodes(proxyList);
+            this.customRules.forEach(rule => {
+                this.config['proxy-groups'].push({
+                    type: "select",
+                    name: t(`outboundNames.${rule.name}`),
+                    proxies: [t('outboundNames.Node Select'), ...cleanList]
+                });
             });
-        });
+        }
     }
 
     addFallBackGroup(proxyList) {
-        const cleanList = proxyList.filter(n => !n.includes('剩余') && !n.includes('套餐') && !n.includes('倍率') && !n.includes('官网'));
+        const cleanList = this.filterPrivateNodes(proxyList);
         this.config['proxy-groups'].push({
             type: "select",
             name: t('outboundNames.Fall Back'),
