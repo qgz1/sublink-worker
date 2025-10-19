@@ -188,7 +188,12 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         const autoSelect = t('outboundNames.Auto Select');
         const nodeSelect = t('outboundNames.Node Select');
 
-        outbounds.forEach(outbound => {
+        // 过滤掉"私有网络"出站
+        const filteredOutbounds = outbounds.filter(outbound => 
+            outbound !== '私有网络' && t(`outboundNames.${outbound}`) !== '🏠 私有网络'
+        );
+
+        filteredOutbounds.forEach(outbound => {
             const outboundName = t(`outboundNames.${outbound}`);
 
             if (outboundName !== nodeSelect) {
