@@ -188,12 +188,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         const autoSelect = t('outboundNames.Auto Select');
         const nodeSelect = t('outboundNames.Node Select');
 
-        // 过滤掉"私有网络"出站
-        const filteredOutbounds = outbounds.filter(outbound => 
-            outbound !== '私有网络' && t(`outboundNames.${outbound}`) !== '🏠 私有网络'
-        );
-
-        filteredOutbounds.forEach(outbound => {
+        outbounds.forEach(outbound => {
             const outboundName = t(`outboundNames.${outbound}`);
 
             if (outboundName !== nodeSelect) {
@@ -210,6 +205,12 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                         'REJECT',
                         ...proxyList
                     ]);
+
+                    if (/media|stream|video|youtube|netflix/i.test(outbound)) {
+                        optimized = new Set(['🇭🇰 香港自动', '🇸🇬 新加坡自动', ...optimized]);
+                    } else if (/openai|chatgpt|ai/i.test(outbound)) {
+                        optimized = new Set(['🇸🇬 新加坡自动', '🇺🇸 美国自动', ...optimized]);
+                    }
                 }
 
                 this.config['proxy-groups'].push({
@@ -242,68 +243,31 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     }
 
     generateRules() {
-        // 获取原始规则
-        const rules = generateRules(this.selectedRules, this.customRules);
-        
-        // 过滤和重定向"私有网络"规则
-        return rules.map(rule => {
-            // 如果规则指向"私有网络"，重定向到"节点选择"
-            if (rule.outbound === '私有网络') {
-                return {
-                    ...rule,
-                    outbound: 'Node Select'
-                };
-            }
-            return rule;
-        });
+        return generateRules(this.selectedRules, this.customRules);
     }
 
     formatConfig() {
         const rules = this.generateRules();
         const ruleResults = [];
 
-        // 生成规则集，并过滤掉"私有网络"相关的规则集
-        const { site_rule_providers, ip_rule_providers } = generateClashRuleSets(
-            this.selectedRules.filter(rule => rule !== '私有网络'), 
-            this.customRules
-        );
-        
+        const { site_rule_providers, ip_rule_providers } = generateClashRuleSets(this.selectedRules, this.customRules);
         this.config['rule-providers'] = { ...site_rule_providers, ...ip_rule_providers };
 
-        // 处理规则
-        rules.forEach(rule => {
-            // 确保规则指向有效的出站
-            const outboundName = t('outboundNames.' + rule.outbound);
-            
-            // 处理域名后缀规则
-            if (rule.domain_suffix) {
-                rule.domain_suffix.forEach(s => 
-                    ruleResults.push(`DOMAIN-SUFFIX,${s},${outboundName}`));
-            }
-            
-            // 处理域名关键词规则
-            if (rule.domain_keyword) {
-                rule.domain_keyword.forEach(k => 
-                    ruleResults.push(`DOMAIN-KEYWORD,${k},${outboundName}`));
-            }
-            
-            // 处理站点规则集
-            if (rule.site_rules) {
-                rule.site_rules.forEach(s => 
-                    ruleResults.push(`RULE-SET,${s},${outboundName}`));
-            }
-            
-            // 处理IP规则集
-            if (rule.ip_rules) {
-                rule.ip_rules.forEach(ip => 
-                    ruleResults.push(`RULE-SET,${ip},${outboundName},no-resolve`));
-            }
-            
-            // 处理IP CIDR规则
-            if (rule.ip_cidr) {
-                rule.ip_cidr.forEach(cidr => 
-                    ruleResults.push(`IP-CIDR,${cidr},${outboundName},no-resolve`));
-            }
+        rules.filter(r => !!r.domain_suffix || !!r.domain_keyword).forEach(rule => {
+            rule.domain_suffix?.forEach(s => ruleResults.push(`DOMAIN-SUFFIX,${s},${t('outboundNames.' + rule.outbound)}`));
+            rule.domain_keyword?.forEach(k => ruleResults.push(`DOMAIN-KEYWORD,${k},${t('outboundNames.' + rule.outbound)}`));
+        });
+
+        rules.filter(r => !!r.site_rules?.[0]).forEach(rule => {
+            rule.site_rules.forEach(s => ruleResults.push(`RULE-SET,${s},${t('outboundNames.' + rule.outbound)}`));
+        });
+
+        rules.filter(r => !!r.ip_rules?.[0]).forEach(rule => {
+            rule.ip_rules.forEach(ip => ruleResults.push(`RULE-SET,${ip},${t('outboundNames.' + rule.outbound)},no-resolve`));
+        });
+
+        rules.filter(r => !!r.ip_cidr).forEach(rule => {
+            rule.ip_cidr.forEach(cidr => ruleResults.push(`IP-CIDR,${cidr},${t('outboundNames.' + rule.outbound)},no-resolve`));
         });
 
         this.config.rules = [...ruleResults];
