@@ -40,7 +40,14 @@ export const UNIFIED_RULES = [
 		site_rules: ['google'],
 		ip_rules: ['google']
 	},
-	// 完全移除 Private 规则
+	{
+		name: 'Private Network',
+		outbound: 'DIRECT',
+		site_rules: [],
+		ip_rules: ['private'],
+		domain_suffix: ['local', 'localhost'],
+		domain_keyword: ['local']
+	},
 	{
 		name: 'Location:CN',
 		outbound: t('outboundNames.Location:CN'),
@@ -116,8 +123,8 @@ export const UNIFIED_RULES = [
 ];
 
 export const PREDEFINED_RULE_SETS = {
-	minimal: ['Location:CN', 'Non-China'], // 移除 Private
-	balanced: ['Location:CN', 'Non-China','Github', 'Google', 'Youtube', 'AI Services', 'Telegram'], // 移除 Private
+	minimal: ['Location:CN', 'Private Network', 'Non-China'],
+	balanced: ['Location:CN', 'Private Network', 'Non-China','Github', 'Google', 'Youtube', 'AI Services', 'Telegram'],
 	comprehensive: UNIFIED_RULES.map(rule => rule.name)
 };
   
@@ -179,6 +186,7 @@ export function generateRules(selectedRules = [], customRules = []) {
 		  site_rules: rule.site_rules,
 		  ip_rules: rule.ip_rules,
 		  domain_suffix: rule?.domain_suffix,
+		  domain_keyword: rule?.domain_keyword,
 		  ip_cidr: rule?.ip_cidr,
 		  outbound: rule.name
 		});
