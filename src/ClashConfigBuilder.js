@@ -243,8 +243,16 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
 
     generateRules() {
         const rules = generateRules(this.selectedRules, this.customRules);
-        // 过滤掉指向"私有网络"的规则
-        return rules.filter(rule => rule.outbound !== '私有网络');
+        // 过滤掉指向"私有网络"的规则，并将其重定向到"节点选择"
+        return rules.map(rule => {
+            if (rule.outbound === '私有网络') {
+                return {
+                    ...rule,
+                    outbound: '节点选择' // 将私有网络规则重定向到节点选择
+                };
+            }
+            return rule;
+        });
     }
 
     formatConfig() {
