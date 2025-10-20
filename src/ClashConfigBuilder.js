@@ -1,5 +1,5 @@
 import yaml from 'js-yaml';
-import { CLASH_CONFIG, generateRules, generateClashRuleSets, getOutbounds, PREDEFINED_RULE_SETS } from './config.js';
+import { CLASH_CONFIG, generateRules, generateClashRuleSets } from './config.js';
 import { BaseConfigBuilder } from './BaseConfigBuilder.js';
 import { DeepCopy } from './utils.js';
 import { t } from './i18n/index.js';
@@ -155,6 +155,33 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.config.proxies.push(proxy);
     }
 
+    /** 🆕 自动创建地区测速分组 🇭🇰 🇸🇬 🇺🇸 🇯🇵 */
+    addRegionAutoGroups(proxyList) {
+        const regions = {
+            '🇭🇰 香港自动': /(香港|HK|🇭🇰)/i,
+            '🇸🇬 新加坡自动': /(新加坡|SG|🇸🇬)/i,
+            '🇺🇸 美国自动': /(美国|US|🇺🇸)/i,
+            '🇯🇵 日本自动': /(日本|JP|🇯🇵)/i,
+        };
+
+        this.config['proxy-groups'] = this.config['proxy-groups'] || [];
+
+        for (const [regionName, regex] of Object.entries(regions)) {
+            const regionProxies = proxyList.filter(p => regex.test(p));
+            if (regionProxies.length > 0 &&
+                !this.config['proxy-groups'].some(g => g.name === regionName)) {
+                this.config['proxy-groups'].push({
+                    name: regionName,
+                    type: 'url-test',
+                    proxies: DeepCopy(regionProxies),
+                    url: 'https://www.gstatic.com/generate_204',
+                    interval: 300,
+                    lazy: false,
+                });
+            }
+        }
+    }
+
     addAutoSelectGroup(proxyList) {
         const autoName = t('outboundNames.Auto Select');
         if (this.config['proxy-groups']?.some(g => g.name === autoName)) return;
@@ -206,9 +233,12 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                         ...proxyList
                     ]);
 
+                    // 🎬 媒体分流
                     if (/media|stream|video|youtube|netflix/i.test(outbound)) {
                         optimized = new Set(['🇭🇰 香港自动', '🇸🇬 新加坡自动', ...optimized]);
-                    } else if (/openai|chatgpt|ai/i.test(outbound)) {
+                    }
+                    // 🤖 AI分流
+                    else if (/openai|chatgpt|ai/i.test(outbound)) {
                         optimized = new Set(['🇸🇬 新加坡自动', '🇺🇸 美国自动', ...optimized]);
                     }
                 }
