@@ -188,41 +188,69 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         const autoSelect = t('outboundNames.Auto Select');
         const nodeSelect = t('outboundNames.Node Select');
 
+        // 定义优先节点（可以根据实际情况调整）
+        const priorityNodes = ['🇭🇰 香港自动', '🇸🇬 新加坡自动', '🇯🇵 日本自动'];
+
         outbounds.forEach(outbound => {
             const outboundName = t(`outboundNames.${outbound}`);
-
             if (outboundName !== nodeSelect) {
                 let optimized;
 
-                // ✅ 国内服务仅保留直连
+                // 国内服务仅保留直连
                 if (outboundName === t('outboundNames.国内服务') || outboundName === '🔒 国内服务') {
                     optimized = ['DIRECT'];
                 } else {
+                    // 默认包含所有节点和自动
                     optimized = new Set([
-                        nodeSelect,
+                        ...priorityNodes,
                         autoSelect,
                         'DIRECT',
                         'REJECT',
                         ...proxyList
                     ]);
 
-                    // 优化流媒体服务
-                    if (/media|stream|video|youtube|netflix/i.test(outbound)) {
-                        optimized = new Set(['🇭🇰 香港自动', '🇸🇬 新加坡自动', ...optimized]);
-                    } else if (/openai|chatgpt|ai/i.test(outbound)) {
-                        optimized = new Set(['🇸🇬 新加坡自动', '🇺🇸 美国自动', ...optimized]);
+                    // 根据不同类型，优先排序
+                    const lowerOutbound = outbound.toLowerCase();
+
+                    // 流媒体
+                    if (/media|stream|video|youtube|netflix/i.test(lowerOutbound)) {
+                        optimized = new Set([
+                            '🇭🇰 香港自动',
+                            '🇸🇬 新加坡自动',
+                            ...optimized
+                        ]);
                     }
-                    // 新增优化：游戏服务
-                    else if (/game|gaming|steam/i.test(outbound)) {
-                        optimized = new Set(['🇭🇰 香港自动', '🇯🇵 日本自动', ...optimized]);
+                    // AI/ChatGPT
+                    else if (/openai|chatgpt|ai/i.test(lowerOutbound)) {
+                        optimized = new Set([
+                            '🇸🇬 新加坡自动',
+                            '🇺🇸 美国自动',
+                            ...optimized
+                        ]);
                     }
-                    // 新增优化：下载服务
-                    else if (/download|torrent|p2p/i.test(outbound)) {
-                        optimized = new Set(['🇸🇬 新加坡自动', '🇯🇵 日本自动', ...optimized]);
+                    // 游戏
+                    else if (/game|gaming|steam/i.test(lowerOutbound)) {
+                        optimized = new Set([
+                            '🇭🇰 香港自动',
+                            '🇯🇵 日本自动',
+                            ...optimized
+                        ]);
                     }
-                    // 新增优化：社交媒体
-                    else if (/social|twitter|facebook|telegram/i.test(outbound)) {
-                        optimized = new Set(['🇭🇰 香港自动', '🇸🇬 新加坡自动', ...optimized]);
+                    // 下载
+                    else if (/download|torrent|p2p/i.test(lowerOutbound)) {
+                        optimized = new Set([
+                            '🇸🇬 新加坡自动',
+                            '🇯🇵 日本自动',
+                            ...optimized
+                        ]);
+                    }
+                    // 社交、社媒
+                    else if (/social|twitter|facebook|telegram/i.test(lowerOutbound)) {
+                        optimized = new Set([
+                            '🇭🇰 香港自动',
+                            '🇸🇬 新加坡自动',
+                            ...optimized
+                        ]);
                     }
                 }
 
