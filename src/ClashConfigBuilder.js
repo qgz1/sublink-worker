@@ -156,6 +156,33 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.config.proxies.push(proxy);
     }
 
+    // 💡 自动创建地区测速组
+    addRegionGroups(proxyList) {
+        const regions = {
+            '🇭🇰 香港自动': /香港|HK|Hong/i,
+            '🇸🇬 新加坡自动': /新加坡|SG|Singapore/i,
+            '🇯🇵 日本自动': /日本|JP|Tokyo|Osaka/i,
+            '🇺🇸 美国自动': /美国|US|United/i,
+            '🇹🇼 台湾自动': /台湾|TW|Taiwan/i,
+            '🇬🇧 英国自动': /英国|UK|London/i
+        };
+
+        for (const [regionName, regex] of Object.entries(regions)) {
+            const matched = proxyList.filter(p => regex.test(p));
+            if (matched.length === 0) continue;
+
+            this.config['proxy-groups'].push({
+                name: regionName,
+                type: 'url-test',
+                proxies: matched,
+                url: 'https://cp.cloudflare.com/generate_204',
+                interval: 600,
+                tolerance: 50,
+                lazy: true
+            });
+        }
+    }
+
     addAutoSelectGroup(proxyList) {
         const autoName = t('outboundNames.Auto Select');
         if (this.config['proxy-groups']?.some(g => g.name === autoName)) return;
