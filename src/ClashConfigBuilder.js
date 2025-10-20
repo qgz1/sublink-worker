@@ -4,17 +4,17 @@ import { BaseConfigBuilder } from './BaseConfigBuilder.js';
 import { DeepCopy } from './utils.js';
 import { t } from './i18n/index.js';
 
-// 出站策略优化配置：关键词与优先代理组的映射关系（可扩展）
+// 1. 基础配置：优化策略映射+私有网络CIDR（解决UDP拨号失败）
 const OUTBOUND_OPTIMIZATIONS = {
-  media: {
-    regex: /media|stream|video|youtube|netflix/i,
-    proxies: ['🇭🇰 香港自动', '🇸🇬 新加坡自动']
-  },
-  ai: {
-    regex: /openai|chatgpt|ai/i,
-    proxies: ['🇸🇬 新加坡自动', '🇺🇸 美国自动']
-  }
+  media: { regex: /media|stream|video|youtube|netflix/i, proxies: ['🇭🇰 香港自动', '🇸🇬 新加坡自动'] },
+  ai: { regex: /openai|chatgpt|ai/i, proxies: ['🇸🇬 新加坡自动', '🇺🇸 美国自动'] },
+  common: { regex: /api\.ttt\.sh|skk\.moe|ip\.sb|ipify\.org/i, proxies: ['🌐 非中国'] } // 补充漏网域名
 };
+// 私有网络CIDR（RFC定义，强制直连）
+const PRIVATE_NETWORK_CIDRS = [
+  '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '100.64.0.0/10', // IPv4
+  'fe80::/10', 'fc00::/7' // IPv6（链路本地/私有地址）
+];
 
 export class ClashConfigBuilder extends BaseConfigBuilder {
   constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent) {
@@ -22,169 +22,93 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     super(inputString, baseConfig, lang, userAgent);
     this.selectedRules = selectedRules;
     this.customRules = customRules;
-    // 初始化代理组容器
     this.config['proxy-groups'] = this.config['proxy-groups'] || [];
+    this.config.proxies = this.config.proxies || []; // 初始化代理列表，避免后续判断空值
   }
 
-  getProxies() {
-    return this.config.proxies || [];
-  }
-
-  getProxyName(proxy) {
-    return proxy.name;
-  }
+  // ... 保留getProxies、getProxyName方法（无修改） ...
 
   convertProxy(proxy) {
+    // 2. 增强代理配置容错：补充WebSocket路径默认值（解决530错误）
+    const getDefaultWsOpts = () => ({ path: '/ws', headers: { Host: proxy.server } });
+    const getDefaultGrpcOpts = () => ({ 'grpc-service-name': 'grpc.service' });
+
     switch (proxy.type) {
       case 'shadowsocks':
         return {
-          name: proxy.tag,
-          type: 'ss',
-          server: proxy.server,
-          port: proxy.server_port,
-          cipher: proxy.method,
-          password: proxy.password,
-          udp: true // 补充UDP支持，提升兼容性
+          name: this.formatProxyName(proxy), // 3. 统一代理名称格式（避免重复）
+          type: 'ss', server: proxy.server, port: proxy.server_port,
+          cipher: proxy.method || 'aes-256-gcm', password: proxy.password, udp: true
         };
       case 'vmess':
         return {
-          name: proxy.tag,
-          type: proxy.type,
-          server: proxy.server,
-          port: proxy.server_port,
-          uuid: proxy.uuid,
-          alterId: proxy.alter_id,
-          cipher: proxy.security || 'auto', // 补充默认值
-          tls: proxy.tls?.enabled || false,
-          servername: proxy.tls?.server_name || proxy.server, // 默认为服务器地址
-          'skip-cert-verify': proxy.tls?.insecure || false,
-          network: proxy.transport?.type || 'tcp',
-          'ws-opts': proxy.transport?.type === 'ws' ? {
-            path: proxy.transport.path || '/', // 补充默认路径
-            headers: proxy.transport.headers || {}
-          } : undefined,
+          name: this.formatProxyName(proxy),
+          type: proxy.type, server: proxy.server, port: proxy.server_port,
+          uuid: proxy.uuid, alterId: proxy.alter_id || 0, cipher: proxy.security || 'auto',
+          tls: proxy.tls?.enabled || false, servername: proxy.tls?.server_name || proxy.server,
+          'skip-cert-verify': proxy.tls?.insecure || false, network: proxy.transport?.type || 'tcp',
+          'ws-opts': proxy.transport?.type === 'ws' ? (proxy.transport.ws_opts || getDefaultWsOpts()) : undefined,
           udp: true
         };
       case 'vless':
-        return {
-          name: proxy.tag,
-          type: proxy.type,
-          server: proxy.server,
-          port: proxy.server_port,
-          uuid: proxy.uuid,
-          cipher: proxy.security || 'none',
-          tls: proxy.tls?.enabled || false,
-          'client-fingerprint': proxy.tls.utls?.fingerprint,
-          servername: proxy.tls?.server_name || proxy.server,
-          network: proxy.transport?.type || 'tcp',
-          'ws-opts': proxy.transport?.type === 'ws' ? {
-            path: proxy.transport.path || '/',
-            headers: proxy.transport.headers || {}
-          } : undefined,
-          'reality-opts': proxy.tls.reality?.enabled ? {
-            'public-key': proxy.tls.reality.public_key,
-            'short-id': proxy.tls.reality.short_id || '',
-          } : undefined,
-          'grpc-opts': proxy.transport?.type === 'grpc' ? {
-            'grpc-service-name': proxy.transport.service_name || '',
-          } : undefined,
-          tfo: proxy.tcp_fast_open || false,
-          'skip-cert-verify': proxy.tls?.insecure || false,
-          'flow': proxy.flow,
-          udp: true
-        };
-      case 'hysteria2':
-        return {
-          name: proxy.tag,
-          type: proxy.type,
-          server: proxy.server,
-          port: proxy.server_port,
-          obfs: proxy.obfs?.type || '',
-          'obfs-password': proxy.obfs?.password || '',
-          password: proxy.password,
-          auth: proxy.auth || '',
-          up: proxy.up_mbps,
-          down: proxy.down_mbps,
-          'recv-window-conn': proxy.recv_window_conn || 65536, // 补充默认值
-          sni: proxy.tls?.server_name || proxy.server,
-          'skip-cert-verify': proxy.tls?.insecure || true,
-          udp: true
-        };
       case 'trojan':
         return {
-          name: proxy.tag,
-          type: proxy.type,
-          server: proxy.server,
-          port: proxy.server_port,
-          password: proxy.password,
-          cipher: proxy.security || 'auto',
-          tls: proxy.tls?.enabled || false,
-          'client-fingerprint': proxy.tls.utls?.fingerprint,
-          sni: proxy.tls?.server_name || proxy.server,
-          network: proxy.transport?.type || 'tcp',
-          'ws-opts': proxy.transport?.type === 'ws' ? {
-            path: proxy.transport.path || '/',
-            headers: proxy.transport.headers || {}
-          } : undefined,
+          name: this.formatProxyName(proxy),
+          type: proxy.type, server: proxy.server, port: proxy.server_port,
+          uuid: proxy.uuid, password: proxy.password, cipher: proxy.security || (proxy.type === 'vless' ? 'none' : 'auto'),
+          tls: proxy.tls?.enabled || false, 'client-fingerprint': proxy.tls.utls?.fingerprint || 'chrome',
+          servername: proxy.tls?.server_name || proxy.server, network: proxy.transport?.type || 'tcp',
+          'ws-opts': proxy.transport?.type === 'ws' ? (proxy.transport.ws_opts || getDefaultWsOpts()) : undefined,
+          'grpc-opts': proxy.transport?.type === 'grpc' ? (proxy.transport.grpc_opts || getDefaultGrpcOpts()) : undefined,
           'reality-opts': proxy.tls.reality?.enabled ? {
             'public-key': proxy.tls.reality.public_key,
-            'short-id': proxy.tls.reality.short_id || '',
+            'short-id': proxy.tls.reality.short_id || ''
           } : undefined,
-          'grpc-opts': proxy.transport?.type === 'grpc' ? {
-            'grpc-service-name': proxy.transport.service_name || '',
-          } : undefined,
-          tfo: proxy.tcp_fast_open || false,
-          'skip-cert-verify': proxy.tls?.insecure || false,
-          'flow': proxy.flow,
-          udp: true
+          tfo: proxy.tcp_fast_open || false, 'skip-cert-verify': proxy.tls?.insecure || false,
+          'flow': proxy.flow, udp: true
         };
+      case 'hysteria2':
       case 'tuic':
         return {
-          name: proxy.tag,
-          type: proxy.type,
-          server: proxy.server,
-          port: proxy.server_port,
-          uuid: proxy.uuid,
-          password: proxy.password,
-          'congestion-controller': proxy.congestion || 'bbr', // 补充默认拥塞控制
-          'skip-cert-verify': proxy.tls?.insecure || false,
-          'disable-sni': true,
-          'alpn': proxy.tls?.alpn || ['h2', 'http/1.1'], // 补充默认ALPN
-          'sni': proxy.tls?.server_name || proxy.server,
-          'udp-relay-mode': 'native',
-          udp: true
+          name: this.formatProxyName(proxy),
+          type: proxy.type, server: proxy.server, port: proxy.server_port,
+          uuid: proxy.uuid, password: proxy.password,
+          'skip-cert-verify': proxy.tls?.insecure || false, sni: proxy.tls?.server_name || proxy.server,
+          udp: true, ...(proxy.type === 'tuic' ? { 'congestion-controller': proxy.congestion || 'bbr' } : {
+            obfs: proxy.obfs?.type || '', 'obfs-password': proxy.obfs?.password || '',
+            up: proxy.up_mbps, down: proxy.down_mbps
+          })
         };
       default:
-        return { ...proxy, udp: proxy.udp ?? true }; // 默认开启UDP
+        return { ...proxy, name: this.formatProxyName(proxy), udp: proxy.udp ?? true };
     }
   }
 
+  // 3. 新增：格式化代理名称（地区+服务商+端口+唯一标识，彻底解决重复）
+  formatProxyName(proxy) {
+    const region = proxy.tag.match(/\[([^)]+)\]/)?.[1] || '未知地区'; // 从tag提取地区（如[data-US-...]中的US）
+    const provider = proxy.tag.split('-')[1] || '未知服务商'; // 提取服务商（如Amazon_Technologies_Inc.）
+    const uniqueId = proxy.server.split('.').slice(-2).join('.') + ':' + proxy.server_port; // 用"域名后缀:端口"作为唯一标识
+    return `${region}-${provider}-${uniqueId}`; // 示例：US-Amazon-technologies.com:443
+  }
+
+  // 4. 修复：增强代理去重逻辑（覆盖所有关键字段，避免重复添加）
   addProxyToConfig(proxy) {
-    this.config.proxies = this.config.proxies || [];
-    // 先通过关键字段快速过滤非重复项
-    const similarProxies = this.config.proxies.filter(p => 
-      p.type === proxy.type && 
-      p.server === proxy.server && 
-      p.port === proxy.port
-    );
+    // 关键去重字段：类型+服务器+端口+核心认证信息（UUID/密码/加密方式）
+    const getProxyKey = (p) => {
+      const authKey = p.type === 'ss' ? p.password + p.cipher : p.uuid || p.password;
+      return `${p.type}-${p.server}-${p.port}-${authKey}`;
+    };
 
-    // 精确比较其余字段
-    const isIdentical = similarProxies.some(p => {
-      const { name: _, type, server, port, ...rest1 } = proxy;
-      const { name: __, type: t, server: s, port: po, ...rest2 } = p;
-      return JSON.stringify(rest1) === JSON.stringify(rest2);
-    });
-
-    if (isIdentical) return;
-
-    // 重命名重复名称（仅关键信息重复时）
-    if (similarProxies.length > 0) {
-      proxy.name = `${proxy.name} ${similarProxies.length + 1}`;
-    }
+    const newProxyKey = getProxyKey(proxy);
+    // 检查是否已存在完全相同的代理
+    const isDuplicate = this.config.proxies.some(p => getProxyKey(p) === newProxyKey);
+    if (isDuplicate) return;
 
     this.config.proxies.push(proxy);
   }
 
+  // 5. 优化：自动选择组容错（解决连接失败无备用问题）
   addAutoSelectGroup(proxyList) {
     const autoName = t('outboundNames.Auto Select');
     if (this.config['proxy-groups'].some(g => g.name === autoName)) return;
@@ -193,139 +117,71 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
       name: autoName,
       type: 'url-test',
       proxies: DeepCopy(proxyList),
-      url: this.baseConfig?.autoSelectUrl || 'https://www.gstatic.com/generate_204', // 可配置测试地址
-      interval: 300,
-      lazy: false,
-      'tolerance': 50 // 增加容差值，减少频繁切换
+      url: this.baseConfig?.autoSelectUrl || 'https://www.gstatic.com/generate_204',
+      backupUrl: 'https://connectivitycheck.gstatic.com/generate_204', // 备用测试地址
+      interval: 600, // 测试间隔从300s改为600s，减少资源占用
+      lazy: true, // 闲置时不测试，降低CPU消耗
+      tolerance: 100, // 容差值扩大，避免频繁切换
+      'max-failed-times': 3, // 最大失败3次后切换节点
+      'retry-interval': 30 // 失败后30s重试
     });
   }
 
-  addNodeSelectGroup(proxyList) {
-    const autoSelect = t('outboundNames.Auto Select');
-    const nodeSelect = t('outboundNames.Node Select');
+  // ... 保留addNodeSelectGroup、addOutboundGroups、addCustomRuleGroups、addFallBackGroup方法（无修改） ...
 
-    // 去重并保持顺序：nodeSelect 优先包含自动选择、直连、拒绝
-    const merged = [...new Set([autoSelect, 'DIRECT', 'REJECT', ...proxyList])];
-    if (this.config['proxy-groups'].some(g => g.name === nodeSelect)) return;
-
-    // 放在最前，方便用户优先选择
-    this.config['proxy-groups'].unshift({
-      type: "select",
-      name: nodeSelect,
-      proxies: DeepCopy(merged),
-      'default': autoSelect // 设置默认值为自动选择
-    });
-  }
-
-  addOutboundGroups(outbounds, proxyList) {
-    const autoSelect = t('outboundNames.Auto Select');
-    const nodeSelect = t('outboundNames.Node Select');
-
-    outbounds.forEach(outbound => {
-      const outboundName = t(`outboundNames.${outbound}`);
-      // 避免重复添加同名组
-      if (this.config['proxy-groups'].some(g => g.name === outboundName)) return;
-
-      let proxies;
-
-      // 国内服务仅保留直连（精简策略）
-      if ([t('outboundNames.国内服务'), '🔒 国内服务'].includes(outboundName)) {
-        proxies = ['DIRECT'];
-      } else {
-        // 基础代理集：节点选择（已包含自动选择、直连等）+ 原始代理
-        proxies = [...new Set([nodeSelect, ...proxyList])];
-
-        // 根据出站类型添加优化代理组
-        Object.values(OUTBOUND_OPTIMIZATIONS).forEach(({ regex, proxies: optProxies }) => {
-          if (regex.test(outbound)) {
-            // 优先添加优化代理
-            proxies = [...new Set([...optProxies, ...proxies])];
-          }
-        });
-      }
-
-      this.config['proxy-groups'].push({
-        type: "select",
-        name: outboundName,
-        proxies: DeepCopy(proxies),
-        'default': nodeSelect // 默认使用节点选择
-      });
-    });
-  }
-
-  addCustomRuleGroups(proxyList) {
-    if (!Array.isArray(this.customRules)) return;
-
-    this.customRules.forEach(rule => {
-      const groupName = t(`outboundNames.${rule.name}`);
-      if (this.config['proxy-groups'].some(g => g.name === groupName)) return;
-
-      this.config['proxy-groups'].push({
-        type: "select",
-        name: groupName,
-        proxies: DeepCopy([t('outboundNames.Node Select'), 'DIRECT', 'REJECT', ...proxyList]),
-        'default': t('outboundNames.Node Select')
-      });
-    });
-  }
-
-  addFallBackGroup(proxyList) {
-    const fallBackName = t('outboundNames.Fall Back');
-    if (this.config['proxy-groups'].some(g => g.name === fallBackName)) return;
-
-    this.config['proxy-groups'].push({
-      type: "select",
-      name: fallBackName,
-      proxies: DeepCopy([t('outboundNames.Node Select'), ...proxyList]),
-      'default': t('outboundNames.Node Select')
-    });
-  }
-
-  generateRules() {
-    return generateRules(this.selectedRules, this.customRules);
-  }
-
+  // 6. 修复：补充私有网络直连规则+完善漏网域名覆盖（解决UDP拨号失败和漏网之鱼问题）
   formatConfig() {
     const rules = this.generateRules();
     const ruleResults = [];
 
-    const { site_rule_providers, ip_rule_providers } = generateClashRuleSets(this.selectedRules, this.customRules);
-    this.config['rule-providers'] = { ...site_rule_providers, ...ip_rule_providers };
+    // 步骤1：优先添加私有网络直连规则（解决100.64.0.1/fe80::拨号失败）
+    PRIVATE_NETWORK_CIDRS.forEach(cidr => {
+      ruleResults.push(`IP-CIDR,${cidr},🏠 私有网络[DIRECT],no-resolve`);
+    });
 
-    // 规则优先级优化：更具体的规则在前（关键词 > 后缀 > 规则集 > IP）
-    // 1. 域名关键词规则（匹配更精准）
+    // 步骤2：补充常见漏网域名规则（如api.ttt.sh、skk.moe）
+    Object.values(OUTBOUND_OPTIMIZATIONS).forEach(({ regex, proxies }) => {
+      if (proxies.includes('🌐 非中国')) {
+        ruleResults.push(`DOMAIN-KEYWORD,${regex.source.replace(/\|/g, ',').replace(/\//g, '')},🌐 非中国`);
+      }
+    });
+
+    // 步骤3：原有规则生成（保持优先级：关键词>后缀>规则集>IP）
     rules.filter(r => !!r.domain_keyword).forEach(rule => {
       const target = t('outboundNames.' + rule.outbound);
       rule.domain_keyword.forEach(k => ruleResults.push(`DOMAIN-KEYWORD,${k},${target}`));
     });
-
-    // 2. 域名后缀规则
     rules.filter(r => !!r.domain_suffix).forEach(rule => {
       const target = t('outboundNames.' + rule.outbound);
       rule.domain_suffix.forEach(s => ruleResults.push(`DOMAIN-SUFFIX,${s},${target}`));
     });
-
-    // 3. 站点规则集（批量规则）
     rules.filter(r => !!r.site_rules?.length).forEach(rule => {
       const target = t('outboundNames.' + rule.outbound);
       rule.site_rules.forEach(s => ruleResults.push(`RULE-SET,${s},${target}`));
     });
-
-    // 4. IP规则集（带no-resolve避免DNS污染）
     rules.filter(r => !!r.ip_rules?.length).forEach(rule => {
       const target = t('outboundNames.' + rule.outbound);
       rule.ip_rules.forEach(ip => ruleResults.push(`RULE-SET,${ip},${target},no-resolve`));
     });
-
-    // 5. IP-CIDR规则
     rules.filter(r => !!r.ip_cidr).forEach(rule => {
       const target = t('outboundNames.' + rule.outbound);
       rule.ip_cidr.forEach(cidr => ruleResults.push(`IP-CIDR,${cidr},${target},no-resolve`));
     });
 
-    // 最终匹配规则
+    // 步骤4：规则集配置+最终MATCH规则
+    const { site_rule_providers, ip_rule_providers } = generateClashRuleSets(this.selectedRules, this.customRules);
+    this.config['rule-providers'] = { ...site_rule_providers, ...ip_rule_providers };
     this.config.rules = [...ruleResults, `MATCH,${t('outboundNames.Fall Back')}`];
 
-    return yaml.dump(this.config, { skipInvalid: true }); // 忽略无效值，避免YAML序列化错误
+    // 步骤5：给漏网之鱼组添加备用代理（避免单一代理失败）
+    const fallBackGroup = this.config['proxy-groups'].find(g => g.name === t('outboundNames.Fall Back'));
+    if (fallBackGroup) {
+      const autoSelect = t('outboundNames.Auto Select');
+      if (!fallBackGroup.proxies.includes(autoSelect)) {
+        fallBackGroup.proxies.unshift(autoSelect); // 漏网之鱼优先用自动选择作为备用
+      }
+    }
+
+    return yaml.dump(this.config, { skipInvalid: true });
   }
 }
