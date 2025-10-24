@@ -21,6 +21,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     }
 
     convertProxy(proxy) {
+        // 保持原有的代理转换逻辑不变
         switch (proxy.type) {
             case 'shadowsocks':
                 return {
@@ -238,6 +239,11 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         });
     }
 
+    // 重写代理组添加方法
+    addProxyGroups(proxyList) {
+        this.addFixedProxyGroups(proxyList);
+    }
+
     // 移除旧的代理组创建方法
     addRegionGroups(proxyList) {
         // 不再使用地区分组
@@ -252,7 +258,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     }
 
     addOutboundGroups(outbounds, proxyList) {
-        // 不再创建基于规则的出站组，使用固定的代理组结构
+        // 不再创建基于规则的出站组
     }
 
     addCustomRuleGroups(proxyList) {
@@ -261,11 +267,6 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
 
     addFallBackGroup(proxyList) {
         // 功能已整合到 addFixedProxyGroups 中的 🐟 漏网之鱼
-    }
-
-    // 重写代理组添加方法
-    addProxyGroups(proxyList) {
-        this.addFixedProxyGroups(proxyList);
     }
 
     generateRules() {
@@ -279,32 +280,53 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         const { site_rule_providers, ip_rule_providers } = generateClashRuleSets(this.selectedRules, this.customRules);
         this.config['rule-providers'] = { ...site_rule_providers, ...ip_rule_providers };
 
-        // 映射规则到新的代理组名称
+        // 定义规则到代理组的映射关系
         const outboundMapping = {
-            'DIRECT': '🎯 全球直连',
-            'REJECT': '🛑 全球拦截',
-            'PROXY': '🚀 节点选择',
-            'Auto Select': '🚀 节点选择',
-            'Node Select': '🚀 节点选择',
-            'Fall Back': '🐟 漏网之鱼'
+            // 直连类规则
+            'Bilibili': '🎯 全球直连',
+            'Location:CN': '🎯 全球直连',
+            'Private': '🎯 全球直连',
+            
+            // 拦截类规则
+            'Ad Block': '🛑 全球拦截',
+            
+            // 代理类规则（所有其他规则）
+            'AI Services': '🚀 节点选择',
+            'Youtube': '🚀 节点选择',
+            'Google': '🚀 节点选择',
+            'Telegram': '🚀 节点选择',
+            'Github': '🚀 节点选择',
+            'Microsoft': '🚀 节点选择',
+            'Apple': '🚀 节点选择',
+            'Social Media': '🚀 节点选择',
+            'Streaming': '🚀 节点选择',
+            'Gaming': '🚀 节点选择',
+            'Education': '🚀 节点选择',
+            'Financial': '🚀 节点选择',
+            'Cloud Services': '🚀 节点选择',
+            'Non-China': '🚀 节点选择'
         };
 
+        // 处理域名后缀规则
         rules.filter(r => !!r.domain_suffix || !!r.domain_keyword).forEach(rule => {
             const outbound = outboundMapping[rule.outbound] || '🚀 节点选择';
             rule.domain_suffix?.forEach(s => ruleResults.push(`DOMAIN-SUFFIX,${s},${outbound}`));
             rule.domain_keyword?.forEach(k => ruleResults.push(`DOMAIN-KEYWORD,${k},${outbound}`));
         });
 
+        // 处理站点规则集
         rules.filter(r => !!r.site_rules?.[0]).forEach(rule => {
             const outbound = outboundMapping[rule.outbound] || '🚀 节点选择';
             rule.site_rules.forEach(s => ruleResults.push(`RULE-SET,${s},${outbound}`));
         });
 
+        // 处理IP规则集
         rules.filter(r => !!r.ip_rules?.[0]).forEach(rule => {
             const outbound = outboundMapping[rule.outbound] || '🚀 节点选择';
             rule.ip_rules.forEach(ip => ruleResults.push(`RULE-SET,${ip},${outbound},no-resolve`));
         });
 
+        // 处理IP CIDR规则
         rules.filter(r => !!r.ip_cidr).forEach(rule => {
             const outbound = outboundMapping[rule.outbound] || '🚀 节点选择';
             rule.ip_cidr.forEach(cidr => ruleResults.push(`IP-CIDR,${cidr},${outbound},no-resolve`));
