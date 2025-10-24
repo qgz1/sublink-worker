@@ -76,6 +76,22 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     'skip-cert-verify': proxy.tls?.insecure,
                     flow: proxy.flow ?? undefined
                 };
+            case 'hysteria2':
+                return {
+                    name: proxy.tag,
+                    type: proxy.type,
+                    server: proxy.server,
+                    port: proxy.server_port,
+                    obfs: proxy.obfs?.type,
+                    'obfs-password': proxy.obfs?.password,
+                    password: proxy.password,
+                    auth: proxy.auth,
+                    up: proxy.up_mbps,
+                    down: proxy.down_mbps,
+                    'recv-window-conn': proxy.recv_window_conn,
+                    sni: proxy.tls?.server_name || '',
+                    'skip-cert-verify': proxy.tls?.insecure ?? true
+                };
             case 'trojan':
                 return {
                     name: proxy.tag,
@@ -103,22 +119,6 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     tfo: proxy.tcp_fast_open,
                     'skip-cert-verify': proxy.tls?.insecure,
                     flow: proxy.flow ?? undefined
-                };
-            case 'hysteria2':
-                return {
-                    name: proxy.tag,
-                    type: proxy.type,
-                    server: proxy.server,
-                    port: proxy.server_port,
-                    obfs: proxy.obfs?.type,
-                    'obfs-password': proxy.obfs?.password,
-                    password: proxy.password,
-                    auth: proxy.auth,
-                    up: proxy.up_mbps,
-                    down: proxy.down_mbps,
-                    'recv-window-conn': proxy.recv_window_conn,
-                    sni: proxy.tls?.server_name || '',
-                    'skip-cert-verify': proxy.tls?.insecure ?? true
                 };
             case 'tuic':
                 return {
@@ -156,7 +156,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.config.proxies.push(proxy);
     }
 
-    // 自动创建地区测速组
+    // 💡 自动创建地区测速组
     addRegionGroups(proxyList) {
         const regions = {
             '🇭🇰 香港自动': /香港|HK|Hong/i,
@@ -183,6 +183,65 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         }
     }
 
+    addAutoSelectGroup(proxyList) {
+        const autoName = t('outboundNames.Auto Select');
+        if (this.config['proxy-groups']?.some(g => g.name === autoName)) return;
+
+        this.config['proxy-groups'] = this.config['proxy-groups'] || [];
+        this.config['proxy-groups'].push({
+            name: autoName,
+            type: 'url-test',
+            proxies: DeepCopy(proxyList),
+            url: 'https://cp.cloudflare.com/generate_204',
+            interval: 600,
+            tolerance: 50,
+            lazy: true
+        });
+    }
+
+    addNodeSelectGroup(proxyList) {
+        const autoSelect = t('outboundNames.Auto Select');
+        const nodeSelect = t('outboundNames.Node Select');
+
+        const merged = new Set([autoSelect, 'DIRECT', 'REJECT', ...proxyList]);
+        if (this.config['proxy-groups']?.some(g => g.name === nodeSelect)) return;
+
+        this.config['proxy-groups'].unshift({
+            type: 'select',
+            name: nodeSelect,
+            proxies: DeepCopy([...merged])
+        });
+    }
+
+    addOutboundGroups(outbounds, proxyList) {
+        const autoSelect = t('outboundNames.Auto Select');
+        const nodeSelect = t('outboundNames.Node Select');
+
+        outbounds.forEach(outbound => {
+            const outboundName = t(`outboundNames.${outbound}`);
+            if (outboundName !== nodeSelect) {
+                let optimized;
+                if (outboundName === t('outboundNames.国内服务') || outboundName === '🔒 国内服务') {
+                    optimized = ['DIRECT'];
+                } else {
+                    optimized = new Set([nodeSelect, autoSelect, 'DIRECT', 'REJECT', ...proxyList]);
+
+                    if (/media|stream|video|youtube|netflix/i.test(outbound)) {
+                        optimized = new Set(['🇭🇰 香港自动', '🇸🇬 新加坡自动', ...optimized]);
+                    } else if (/openai|chatgpt|ai/i.test(outbound)) {
+                        optimized = new Set(['🇸🇬 新加坡自动', '🇺🇸 美国自动', ...optimized]);
+                    }
+                }
+
+                this.config['proxy-groups'].push({
+                    type: 'select',
+                    name: outboundName,
+                    proxies: DeepCopy([...optimized])
+                });
+            }
+        });
+    }
+
     addCustomRuleGroups(proxyList) {
         if (Array.isArray(this.customRules)) {
             this.customRules.forEach(rule => {
@@ -195,73 +254,45 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         }
     }
 
+    addFallBackGroup(proxyList) {
+        this.config['proxy-groups'].push({
+            type: 'select',
+            name: t('outboundNames.Fall Back'),
+            proxies: [t('outboundNames.Node Select'), ...proxyList]
+        });
+    }
+
     generateRules() {
         return generateRules(this.selectedRules, this.customRules);
     }
 
     formatConfig() {
-        const proxyList = (this.getProxies() || []).map(p => p.name || 'DIRECT');
-        if (proxyList.length === 0) proxyList.push('DIRECT'); // 兜底至少有一个代理
-
-        this.config['proxy-groups'] = []; // 清空之前的策略组
-
-        // 1️⃣ 自动选择组
-        const autoSelectName = t('outboundNames.Auto Select') || '♻️ 自动选择';
-        this.config['proxy-groups'].push({
-            name: autoSelectName,
-            type: 'url-test',
-            proxies: DeepCopy(proxyList),
-            url: 'https://cp.cloudflare.com/generate_204',
-            interval: 300,
-            tolerance: 50,
-            lazy: true
-        });
-
-        // 2️⃣ 节点选择组
-        const nodeSelectName = t('outboundNames.Node Select') || '🚀 节点选择';
-        const nodeSelectProxies = new Set([autoSelectName, 'DIRECT', 'REJECT', ...proxyList]);
-        this.config['proxy-groups'].unshift({
-            name: nodeSelectName,
-            type: 'select',
-            proxies: DeepCopy([...nodeSelectProxies])
-        });
-
-        // 3️⃣ 地区测速组
-        this.addRegionGroups(proxyList);
-
-        // 4️⃣ 自定义规则和回退组
-        this.addCustomRuleGroups(proxyList);
-        const fallBackName = t('outboundNames.Fall Back') || '🐟 漏网之鱼';
-        this.config['proxy-groups'].push({
-            type: 'select',
-            name: fallBackName,
-            proxies: [nodeSelectName, ...proxyList]
-        });
-
-        // 5️⃣ 生成规则
         const rules = this.generateRules();
         const ruleResults = [];
 
         const { site_rule_providers, ip_rule_providers } = generateClashRuleSets(this.selectedRules, this.customRules);
         this.config['rule-providers'] = { ...site_rule_providers, ...ip_rule_providers };
 
-        rules.forEach(rule => {
-            if (rule.domain_suffix) rule.domain_suffix.forEach(s => ruleResults.push(`DOMAIN-SUFFIX,${s},${t('outboundNames.' + rule.outbound)}`));
-            if (rule.domain_keyword) rule.domain_keyword.forEach(k => ruleResults.push(`DOMAIN-KEYWORD,${k},${t('outboundNames.' + rule.outbound)}`));
-            if (rule.site_rules) rule.site_rules.forEach(s => ruleResults.push(`RULE-SET,${s},${t('outboundNames.' + rule.outbound)}`));
-            if (rule.ip_rules) rule.ip_rules.forEach(ip => ruleResults.push(`RULE-SET,${ip},${t('outboundNames.' + rule.outbound)},no-resolve`));
-            if (rule.ip_cidr) rule.ip_cidr.forEach(cidr => ruleResults.push(`IP-CIDR,${cidr},${t('outboundNames.' + rule.outbound)},no-resolve`));
+        rules.filter(r => !!r.domain_suffix || !!r.domain_keyword).forEach(rule => {
+            rule.domain_suffix?.forEach(s => ruleResults.push(`DOMAIN-SUFFIX,${s},${t('outboundNames.' + rule.outbound)}`));
+            rule.domain_keyword?.forEach(k => ruleResults.push(`DOMAIN-KEYWORD,${k},${t('outboundNames.' + rule.outbound)}`));
         });
 
-        ruleResults.push(`MATCH,${fallBackName}`); // 兜底
-        this.config.rules = ruleResults;
+        rules.filter(r => !!r.site_rules?.[0]).forEach(rule => {
+            rule.site_rules.forEach(s => ruleResults.push(`RULE-SET,${s},${t('outboundNames.' + rule.outbound)}`));
+        });
 
-        // 6️⃣ 输出 YAML
-        try {
-            return yaml.dump(this.config);
-        } catch (err) {
-            console.error('YAML dump error:', err);
-            return 'Error generating config';
-        }
+        rules.filter(r => !!r.ip_rules?.[0]).forEach(rule => {
+            rule.ip_rules.forEach(ip => ruleResults.push(`RULE-SET,${ip},${t('outboundNames.' + rule.outbound)},no-resolve`));
+        });
+
+        rules.filter(r => !!r.ip_cidr).forEach(rule => {
+            rule.ip_cidr.forEach(cidr => ruleResults.push(`IP-CIDR,${cidr},${t('outboundNames.' + rule.outbound)},no-resolve`));
+        });
+
+        this.config.rules = [...ruleResults];
+        this.config.rules.push(`MATCH,${t('outboundNames.Fall Back')}`);
+
+        return yaml.dump(this.config);
     }
 }
