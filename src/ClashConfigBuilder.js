@@ -117,20 +117,16 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     addProxyToConfig(proxy) {
         this.config.proxies = this.config.proxies || [];
         const similarProxies = this.config.proxies.filter(p => p.name.includes(proxy.name));
-
         const isIdentical = similarProxies.some(p => {
             const { name: _, ...rest1 } = proxy;
             const { name: __, ...rest2 } = p;
             return JSON.stringify(rest1) === JSON.stringify(rest2);
         });
-
         if (isIdentical) return;
         if (similarProxies.length > 0) proxy.name = `${proxy.name} ${similarProxies.length + 1}`;
-
         this.config.proxies.push(proxy);
     }
 
-    // ✅ 自动创建地区测速组
     addRegionGroups(proxyNames) {
         const regions = {
             '🇭🇰 香港自动': /香港|HK|Hong/i,
@@ -155,7 +151,6 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         });
     }
 
-    // ✅ 核心出站策略结构
     addMainGroups(proxyNames) {
         const groups = [
             {
@@ -169,14 +164,14 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                 url: 'http://www.gstatic.com/generate_204',
                 interval: 300,
                 tolerance: 50,
-                proxies: proxyNames
+                proxies: proxyNames.length ? proxyNames : ['DIRECT']
             },
             {
                 name: '🔯 故障转移',
                 type: 'fallback',
                 url: 'http://www.gstatic.com/generate_204',
                 interval: 180,
-                proxies: proxyNames
+                proxies: proxyNames.length ? proxyNames : ['DIRECT']
             },
             {
                 name: '🔮 负载均衡',
@@ -184,7 +179,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                 strategy: 'consistent-hashing',
                 url: 'http://www.gstatic.com/generate_204',
                 interval: 180,
-                proxies: proxyNames
+                proxies: proxyNames.length ? proxyNames : ['DIRECT']
             },
             {
                 name: '🎯 全球直连',
@@ -208,7 +203,6 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                 ]
             }
         ];
-
         this.config['proxy-groups'].push(...groups);
     }
 
@@ -216,10 +210,10 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         const proxyList = this.getProxies().map(p => p.name);
         this.config['proxy-groups'] = [];
 
-        // 构建核心出站组
+        // 核心出站组
         this.addMainGroups(proxyList);
 
-        // 自动地区测速组
+        // 地区测速组
         this.addRegionGroups(proxyList);
 
         // 规则
@@ -246,9 +240,13 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
             rule.ip_cidr.forEach(cidr => ruleResults.push(`IP-CIDR,${cidr},${t('outboundNames.' + rule.outbound)},no-resolve`));
         });
 
-        this.config.rules = [...ruleResults];
-        this.config.rules.push(`MATCH,🐟 漏网之鱼`);
+        this.config.rules = ruleResults.length ? ruleResults : ['MATCH,🐟 漏网之鱼'];
 
-        return yaml.dump(this.config);
+        // ✅ 兜底：proxies 为空时添加 DIRECT
+        if (!this.config.proxies || !this.config.proxies.length) {
+            this.config.proxies = [{ name: 'DIRECT', type: 'direct' }];
+        }
+
+        return yaml.dump(this.config, { lineWidth: -1 });
     }
 }
