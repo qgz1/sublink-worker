@@ -156,110 +156,116 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.config.proxies.push(proxy);
     }
 
-    // 💡 自动创建地区测速组
+    // 🚀 创建新的代理组结构
+    addFixedProxyGroups(proxyList) {
+        // 清空现有的代理组
+        this.config['proxy-groups'] = [];
+
+        // 🚀 节点选择 - 手动选择节点
+        this.config['proxy-groups'].push({
+            name: '🚀 节点选择',
+            type: 'select',
+            proxies: [
+                '♻️ 自动选择',
+                '🔯 故障转移', 
+                '🔮 负载均衡',
+                'DIRECT',
+                ...DeepCopy(proxyList) // 包含所有具体节点
+            ]
+        });
+
+        // ♻️ 自动选择 - URL测试自动选择
+        this.config['proxy-groups'].push({
+            name: '♻️ 自动选择',
+            type: 'url-test',
+            url: 'http://www.gstatic.com/generate_204',
+            interval: 300,
+            tolerance: 50,
+            proxies: DeepCopy(proxyList) // 包含所有节点用于自动选择
+        });
+
+        // 🔯 故障转移 - 故障转移策略
+        this.config['proxy-groups'].push({
+            name: '🔯 故障转移',
+            type: 'fallback',
+            url: 'http://www.gstatic.com/generate_204',
+            interval: 180,
+            proxies: DeepCopy(proxyList) // 包含所有节点用于故障转移
+        });
+
+        // 🔮 负载均衡 - 负载均衡策略
+        this.config['proxy-groups'].push({
+            name: '🔮 负载均衡',
+            type: 'load-balance',
+            strategy: 'consistent-hashing',
+            url: 'http://www.gstatic.com/generate_204',
+            interval: 180,
+            proxies: DeepCopy(proxyList) // 包含所有节点用于负载均衡
+        });
+
+        // 🎯 全球直连 - 直连或代理选择
+        this.config['proxy-groups'].push({
+            name: '🎯 全球直连',
+            type: 'select',
+            proxies: [
+                'DIRECT',
+                '🚀 节点选择',
+                '♻️ 自动选择'
+            ]
+        });
+
+        // 🛑 全球拦截 - 拒绝或直连选择
+        this.config['proxy-groups'].push({
+            name: '🛑 全球拦截',
+            type: 'select',
+            proxies: [
+                'REJECT',
+                'DIRECT'
+            ]
+        });
+
+        // 🐟 漏网之鱼 - 未匹配规则的流量处理
+        this.config['proxy-groups'].push({
+            name: '🐟 漏网之鱼',
+            type: 'select',
+            proxies: [
+                '🚀 节点选择',
+                '🎯 全球直连',
+                '♻️ 自动选择',
+                '🔯 故障转移',
+                '🔮 负载均衡'
+            ]
+        });
+    }
+
+    // 移除旧的代理组创建方法
     addRegionGroups(proxyList) {
-        const regions = {
-            '🇭🇰 香港自动': /香港|HK|Hong/i,
-            '🇸🇬 新加坡自动': /新加坡|SG|Singapore/i,
-            '🇯🇵 日本自动': /日本|JP|Tokyo|Osaka/i,
-            '🇺🇸 美国自动': /美国|US|United/i,
-            '🇹🇼 台湾自动': /台湾|TW|Taiwan/i,
-            '🇬🇧 英国自动': /英国|UK|London/i
-        };
-
-        for (const [regionName, regex] of Object.entries(regions)) {
-            const matched = proxyList.filter(p => regex.test(p));
-            if (matched.length === 0) continue;
-
-            this.config['proxy-groups'].push({
-                name: regionName,
-                type: 'url-test',
-                proxies: matched,
-                url: 'https://cp.cloudflare.com/generate_204',
-                interval: 600,
-                tolerance: 50,
-                lazy: true
-            });
-        }
+        // 不再使用地区分组
     }
 
     addAutoSelectGroup(proxyList) {
-        const autoName = t('outboundNames.Auto Select');
-        if (this.config['proxy-groups']?.some(g => g.name === autoName)) return;
-
-        this.config['proxy-groups'] = this.config['proxy-groups'] || [];
-        this.config['proxy-groups'].push({
-            name: autoName,
-            type: 'url-test',
-            proxies: DeepCopy(proxyList),
-            url: 'https://cp.cloudflare.com/generate_204',
-            interval: 600,
-            tolerance: 50,
-            lazy: true
-        });
+        // 功能已整合到 addFixedProxyGroups
     }
 
     addNodeSelectGroup(proxyList) {
-        const autoSelect = t('outboundNames.Auto Select');
-        const nodeSelect = t('outboundNames.Node Select');
-
-        const merged = new Set([autoSelect, 'DIRECT', 'REJECT', ...proxyList]);
-        if (this.config['proxy-groups']?.some(g => g.name === nodeSelect)) return;
-
-        this.config['proxy-groups'].unshift({
-            type: 'select',
-            name: nodeSelect,
-            proxies: DeepCopy([...merged])
-        });
+        // 功能已整合到 addFixedProxyGroups
     }
 
     addOutboundGroups(outbounds, proxyList) {
-        const autoSelect = t('outboundNames.Auto Select');
-        const nodeSelect = t('outboundNames.Node Select');
-
-        outbounds.forEach(outbound => {
-            const outboundName = t(`outboundNames.${outbound}`);
-            if (outboundName !== nodeSelect) {
-                let optimized;
-                if (outboundName === t('outboundNames.国内服务') || outboundName === '🔒 国内服务') {
-                    optimized = ['DIRECT'];
-                } else {
-                    optimized = new Set([nodeSelect, autoSelect, 'DIRECT', 'REJECT', ...proxyList]);
-
-                    if (/media|stream|video|youtube|netflix/i.test(outbound)) {
-                        optimized = new Set(['🇭🇰 香港自动', '🇸🇬 新加坡自动', ...optimized]);
-                    } else if (/openai|chatgpt|ai/i.test(outbound)) {
-                        optimized = new Set(['🇸🇬 新加坡自动', '🇺🇸 美国自动', ...optimized]);
-                    }
-                }
-
-                this.config['proxy-groups'].push({
-                    type: 'select',
-                    name: outboundName,
-                    proxies: DeepCopy([...optimized])
-                });
-            }
-        });
+        // 不再创建基于规则的出站组，使用固定的代理组结构
     }
 
     addCustomRuleGroups(proxyList) {
-        if (Array.isArray(this.customRules)) {
-            this.customRules.forEach(rule => {
-                this.config['proxy-groups'].push({
-                    type: 'select',
-                    name: t(`outboundNames.${rule.name}`),
-                    proxies: [t('outboundNames.Node Select'), ...proxyList]
-                });
-            });
-        }
+        // 不再创建自定义规则组
     }
 
     addFallBackGroup(proxyList) {
-        this.config['proxy-groups'].push({
-            type: 'select',
-            name: t('outboundNames.Fall Back'),
-            proxies: [t('outboundNames.Node Select'), ...proxyList]
-        });
+        // 功能已整合到 addFixedProxyGroups 中的 🐟 漏网之鱼
+    }
+
+    // 重写代理组添加方法
+    addProxyGroups(proxyList) {
+        this.addFixedProxyGroups(proxyList);
     }
 
     generateRules() {
@@ -273,25 +279,40 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         const { site_rule_providers, ip_rule_providers } = generateClashRuleSets(this.selectedRules, this.customRules);
         this.config['rule-providers'] = { ...site_rule_providers, ...ip_rule_providers };
 
+        // 映射规则到新的代理组名称
+        const outboundMapping = {
+            'DIRECT': '🎯 全球直连',
+            'REJECT': '🛑 全球拦截',
+            'PROXY': '🚀 节点选择',
+            'Auto Select': '🚀 节点选择',
+            'Node Select': '🚀 节点选择',
+            'Fall Back': '🐟 漏网之鱼'
+        };
+
         rules.filter(r => !!r.domain_suffix || !!r.domain_keyword).forEach(rule => {
-            rule.domain_suffix?.forEach(s => ruleResults.push(`DOMAIN-SUFFIX,${s},${t('outboundNames.' + rule.outbound)}`));
-            rule.domain_keyword?.forEach(k => ruleResults.push(`DOMAIN-KEYWORD,${k},${t('outboundNames.' + rule.outbound)}`));
+            const outbound = outboundMapping[rule.outbound] || '🚀 节点选择';
+            rule.domain_suffix?.forEach(s => ruleResults.push(`DOMAIN-SUFFIX,${s},${outbound}`));
+            rule.domain_keyword?.forEach(k => ruleResults.push(`DOMAIN-KEYWORD,${k},${outbound}`));
         });
 
         rules.filter(r => !!r.site_rules?.[0]).forEach(rule => {
-            rule.site_rules.forEach(s => ruleResults.push(`RULE-SET,${s},${t('outboundNames.' + rule.outbound)}`));
+            const outbound = outboundMapping[rule.outbound] || '🚀 节点选择';
+            rule.site_rules.forEach(s => ruleResults.push(`RULE-SET,${s},${outbound}`));
         });
 
         rules.filter(r => !!r.ip_rules?.[0]).forEach(rule => {
-            rule.ip_rules.forEach(ip => ruleResults.push(`RULE-SET,${ip},${t('outboundNames.' + rule.outbound)},no-resolve`));
+            const outbound = outboundMapping[rule.outbound] || '🚀 节点选择';
+            rule.ip_rules.forEach(ip => ruleResults.push(`RULE-SET,${ip},${outbound},no-resolve`));
         });
 
         rules.filter(r => !!r.ip_cidr).forEach(rule => {
-            rule.ip_cidr.forEach(cidr => ruleResults.push(`IP-CIDR,${cidr},${t('outboundNames.' + rule.outbound)},no-resolve`));
+            const outbound = outboundMapping[rule.outbound] || '🚀 节点选择';
+            rule.ip_cidr.forEach(cidr => ruleResults.push(`IP-CIDR,${cidr},${outbound},no-resolve`));
         });
 
         this.config.rules = [...ruleResults];
-        this.config.rules.push(`MATCH,${t('outboundNames.Fall Back')}`);
+        // 使用 🐟 漏网之鱼 作为默认规则
+        this.config.rules.push(`MATCH,🐟 漏网之鱼`);
 
         return yaml.dump(this.config);
     }
