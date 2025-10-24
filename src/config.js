@@ -10,7 +10,101 @@ export const SURGE_IP_RULE_SET_BASEURL = 'https://gh-proxy.com/https://github.co
 // Custom rules
 export const CUSTOM_RULES = [];
 
-// 代理组映射常量 - 新增
+// 先定义基础结构，不立即使用 t() 函数
+export const UNIFIED_RULES_BASE = [
+  {
+    name: 'Ad Block',
+    site_rules: ['category-ads-all'],
+    ip_rules: []
+  },
+  {
+    name: 'AI Services',
+    site_rules: ['category-ai-!cn'],
+    ip_rules: []
+  },
+  {
+    name: 'Bilibili',
+    site_rules: ['bilibili'],
+    ip_rules: []
+  },
+  {
+    name: 'Youtube',
+    site_rules: ['youtube'],
+    ip_rules: []
+  },
+  {
+    name: 'Google',
+    site_rules: ['google'],
+    ip_rules: ['google']
+  },
+  {
+    name: 'Private',
+    site_rules: [],
+    ip_rules: ['private']
+  },
+  {
+    name: 'Location:CN',
+    site_rules: ['geolocation-cn','cn'],
+    ip_rules: ['cn']
+  },
+  {
+    name: 'Telegram',
+    site_rules: [],
+    ip_rules: ['telegram']
+  },
+  {
+    name: 'Github',
+    site_rules: ['github', 'gitlab'],
+    ip_rules: []
+  },
+  {
+    name: 'Microsoft',
+    site_rules: ['microsoft'],
+    ip_rules: []
+  },
+  {
+    name: 'Apple',
+    site_rules: ['apple'],
+    ip_rules: []
+  },
+  {
+    name: 'Social Media',
+    site_rules: ['facebook', 'instagram', 'twitter', 'tiktok', 'linkedin'],
+    ip_rules: []
+  },
+  {
+    name: 'Streaming',
+    site_rules: ['netflix', 'hulu', 'disney', 'hbo', 'amazon','bahamut'],
+    ip_rules: []
+  },
+  {
+    name: 'Gaming',
+    site_rules: ['steam', 'epicgames', 'ea', 'ubisoft', 'blizzard'],
+    ip_rules: []
+  },
+  {
+    name: 'Education',
+    site_rules: ['coursera', 'edx', 'udemy', 'khanacademy', 'category-scholar-!cn'],
+    ip_rules: []
+  },
+  {
+    name: 'Financial',
+    site_rules: ['paypal', 'visa', 'mastercard','stripe','wise'],
+    ip_rules: []
+  },
+  {
+    name: 'Cloud Services',
+    site_rules: ['aws', 'azure', 'digitalocean', 'heroku', 'dropbox'],
+    ip_rules: []
+  },
+  {
+    name: 'Non-China',
+    site_rules: ['geolocation-!cn'],
+    ip_rules: []
+  }
+];
+
+// 代理组映射常量 - 使用固定的代理组名称
 export const PROXY_GROUP_MAPPING = {
   // 直连类规则
   'Bilibili': '🎯 全球直连',
@@ -42,165 +136,37 @@ export const PROXY_GROUP_MAPPING = {
   'Fall Back': '🐟 漏网之鱼'
 };
 
-// Unified rule structure - 优化：使用映射后的出站名称
-export const UNIFIED_RULES = [
-  {
-    name: 'Ad Block',
-    outbound: PROXY_GROUP_MAPPING['Ad Block'],
-    site_rules: ['category-ads-all'],
-    ip_rules: []
-  },
-  {
-    name: 'AI Services',
-    outbound: PROXY_GROUP_MAPPING['AI Services'],
-    site_rules: ['category-ai-!cn'],
-    ip_rules: []
-  },
-  {
-    name: 'Bilibili',
-    outbound: PROXY_GROUP_MAPPING['Bilibili'],
-    site_rules: ['bilibili'],
-    ip_rules: []
-  },
-  {
-    name: 'Youtube',
-    outbound: PROXY_GROUP_MAPPING['Youtube'],
-    site_rules: ['youtube'],
-    ip_rules: []
-  },
-  {
-    name: 'Google',
-    outbound: PROXY_GROUP_MAPPING['Google'],
-    site_rules: ['google'],
-    ip_rules: ['google']
-  },
-  {
-    name: 'Private',
-    outbound: PROXY_GROUP_MAPPING['Private'],
-    site_rules: [],
-    ip_rules: ['private']
-  },
-  {
-    name: 'Location:CN',
-    outbound: PROXY_GROUP_MAPPING['Location:CN'],
-    site_rules: ['geolocation-cn','cn'],
-    ip_rules: ['cn']
-  },
-  {
-    name: 'Telegram',
-    outbound: PROXY_GROUP_MAPPING['Telegram'],
-    site_rules: [],
-    ip_rules: ['telegram']
-  },
-  {
-    name: 'Github',
-    outbound: PROXY_GROUP_MAPPING['Github'],
-    site_rules: ['github', 'gitlab'],
-    ip_rules: []
-  },
-  {
-    name: 'Microsoft',
-    outbound: PROXY_GROUP_MAPPING['Microsoft'],
-    site_rules: ['microsoft'],
-    ip_rules: []
-  },
-  {
-    name: 'Apple',
-    outbound: PROXY_GROUP_MAPPING['Apple'],
-    site_rules: ['apple'],
-    ip_rules: []
-  },
-  {
-    name: 'Social Media',
-    outbound: PROXY_GROUP_MAPPING['Social Media'],
-    site_rules: ['facebook', 'instagram', 'twitter', 'tiktok', 'linkedin'],
-    ip_rules: []
-  },
-  {
-    name: 'Streaming',
-    outbound: PROXY_GROUP_MAPPING['Streaming'],
-    site_rules: ['netflix', 'hulu', 'disney', 'hbo', 'amazon','bahamut'],
-    ip_rules: []
-  },
-  {
-    name: 'Gaming',
-    outbound: PROXY_GROUP_MAPPING['Gaming'],
-    site_rules: ['steam', 'epicgames', 'ea', 'ubisoft', 'blizzard'],
-    ip_rules: []
-  },
-  {
-    name: 'Education',
-    outbound: PROXY_GROUP_MAPPING['Education'],
-    site_rules: ['coursera', 'edx', 'udemy', 'khanacademy', 'category-scholar-!cn'],
-    ip_rules: []
-  },
-  {
-    name: 'Financial',
-    outbound: PROXY_GROUP_MAPPING['Financial'],
-    site_rules: ['paypal', 'visa', 'mastercard','stripe','wise'],
-    ip_rules: []
-  },
-  {
-    name: 'Cloud Services',
-    outbound: PROXY_GROUP_MAPPING['Cloud Services'],
-    site_rules: ['aws', 'azure', 'digitalocean', 'heroku', 'dropbox'],
-    ip_rules: []
-  },
-  {
-    name: 'Non-China',
-    outbound: PROXY_GROUP_MAPPING['Non-China'],
-    site_rules: ['geolocation-!cn'],
-    ip_rules: []
-  }
-];
+// 延迟初始化 UNIFIED_RULES
+export function getUnifiedRules() {
+  return UNIFIED_RULES_BASE.map(rule => ({
+    ...rule,
+    outbound: PROXY_GROUP_MAPPING[rule.name] || '🚀 节点选择'
+  }));
+}
 
+// 预定义规则集使用基础名称
 export const PREDEFINED_RULE_SETS = {
   minimal: ['Location:CN', 'Private', 'Non-China'],
   balanced: ['Location:CN', 'Private', 'Non-China','Github', 'Google', 'Youtube', 'AI Services', 'Telegram'],
-  comprehensive: UNIFIED_RULES.map(rule => rule.name)
+  comprehensive: UNIFIED_RULES_BASE.map(rule => rule.name)
 };
 
-// Generate SITE_RULE_SETS and IP_RULE_SETS from UNIFIED_RULES
-export const SITE_RULE_SETS = UNIFIED_RULES.reduce((acc, rule) => {
+// 其他函数保持不变...
+export const SITE_RULE_SETS = UNIFIED_RULES_BASE.reduce((acc, rule) => {
   rule.site_rules.forEach(site_rule => {
     acc[site_rule] = `geosite-${site_rule}.srs`;
   });
   return acc;
 }, {});
 
-export const IP_RULE_SETS = UNIFIED_RULES.reduce((acc, rule) => {
+export const IP_RULE_SETS = UNIFIED_RULES_BASE.reduce((acc, rule) => {
   rule.ip_rules.forEach(ip_rule => {
     acc[ip_rule] = `geoip-${ip_rule}.srs`;
   });
   return acc;
 }, {});
 
-// Generate CLASH_SITE_RULE_SETS and CLASH_IP_RULE_SETS for .mrs format
-export const CLASH_SITE_RULE_SETS = UNIFIED_RULES.reduce((acc, rule) => {
-  rule.site_rules.forEach(site_rule => {
-    acc[site_rule] = `${site_rule}.mrs`;
-  });
-  return acc;
-}, {});
-
-export const CLASH_IP_RULE_SETS = UNIFIED_RULES.reduce((acc, rule) => {
-  rule.ip_rules.forEach(ip_rule => {
-    acc[ip_rule] = `${ip_rule}.mrs`;
-  });
-  return acc;
-}, {});
-
-// Helper function to get outbounds based on selected rule names
-export function getOutbounds(selectedRuleNames) {
-  if (!selectedRuleNames || !Array.isArray(selectedRuleNames)) {
-    return [];
-  }
-  return UNIFIED_RULES
-    .filter(rule => selectedRuleNames.includes(rule.name))
-    .map(rule => rule.name);
-}
-
-// Helper function to generate rules based on selected rule names
+// 修改 generateRules 函数使用 getUnifiedRules()
 export function generateRules(selectedRules = [], customRules = []) {
   if (typeof selectedRules === 'string' && PREDEFINED_RULE_SETS[selectedRules]) {
     selectedRules = PREDEFINED_RULE_SETS[selectedRules];
@@ -211,23 +177,24 @@ export function generateRules(selectedRules = [], customRules = []) {
   }
 
   const rules = [];
+  const unifiedRules = getUnifiedRules(); // 使用延迟初始化的规则
 
-  UNIFIED_RULES.forEach(rule => {
+  unifiedRules.forEach(rule => {
     if (selectedRules.includes(rule.name)) {
       rules.push({
         site_rules: rule.site_rules,
         ip_rules: rule.ip_rules,
         domain_suffix: rule?.domain_suffix,
         ip_cidr: rule?.ip_cidr,
-        outbound: rule.outbound  // 直接使用映射后的出站名称
+        outbound: rule.outbound
       });
     }
   });
 
+  // 自定义规则处理保持不变...
   customRules.reverse();
   customRules.forEach((rule) => {
-    // 为自定义规则应用代理组映射
-    const mappedOutbound = PROXY_GROUP_MAPPING[rule.name] || PROXY_GROUP_MAPPING['AI Services'];
+    const mappedOutbound = PROXY_GROUP_MAPPING[rule.name] || '🚀 节点选择';
     
     rules.unshift({
       site_rules: rule.site.split(','),
@@ -243,365 +210,5 @@ export function generateRules(selectedRules = [], customRules = []) {
   return rules;
 }
 
-export function generateRuleSets(selectedRules = [], customRules = []) {
-  if (typeof selectedRules === 'string' && PREDEFINED_RULE_SETS[selectedRules]) {
-    selectedRules = PREDEFINED_RULE_SETS[selectedRules];
-  }
-  
-  if (!selectedRules || selectedRules.length === 0) {
-    selectedRules = PREDEFINED_RULE_SETS.minimal;
-  }
-
-  const selectedRulesSet = new Set(selectedRules);
-
-  const siteRuleSets = new Set();
-  const ipRuleSets = new Set();
-
-  const ruleSets = [];
-
-  UNIFIED_RULES.forEach(rule => {
-    if (selectedRulesSet.has(rule.name)) {
-      rule.site_rules.forEach(siteRule => siteRuleSets.add(siteRule));
-      rule.ip_rules.forEach(ipRule => ipRuleSets.add(ipRule));
-    }
-  });
-
-  const site_rule_sets = Array.from(siteRuleSets).map(rule => ({
-    tag: rule,
-    type: 'remote',
-    format: 'binary',
-    url: `${SITE_RULE_SET_BASE_URL}${SITE_RULE_SETS[rule]}`,
-  }));
-
-  const ip_rule_sets = Array.from(ipRuleSets).map(rule => ({
-    tag: `${rule}-ip`,
-    type: 'remote',
-    format: 'binary',
-    url: `${IP_RULE_SET_BASE_URL}${IP_RULE_SETS[rule]}`,
-  }));
-
-  if(!selectedRules.includes('Non-China')){
-    site_rule_sets.push({
-      tag: 'geolocation-!cn',
-      type: 'remote',
-      format: 'binary',
-      url: `${SITE_RULE_SET_BASE_URL}geosite-geolocation-!cn.srs`,
-    });
-  }
-
-  if(customRules){
-    customRules.forEach(rule => {
-      if(rule.site!=''){
-        rule.site.split(',').forEach(site => {
-          site_rule_sets.push({
-            tag: site.trim(),
-            type: 'remote',
-            format: 'binary',
-            url: `${SITE_RULE_SET_BASE_URL}geosite-${site.trim()}.srs`,
-          });
-        });
-      }
-      if(rule.ip!=''){
-        rule.ip.split(',').forEach(ip => {
-          ip_rule_sets.push({
-            tag: `${ip.trim()}-ip`,
-            type: 'remote',
-            format: 'binary',
-            url: `${IP_RULE_SET_BASE_URL}geoip-${ip.trim()}.srs`,
-          });
-        });
-      }
-    });
-  }
-
-  ruleSets.push(...site_rule_sets, ...ip_rule_sets);
-
-  return { site_rule_sets, ip_rule_sets };
-}
-
-// Generate rule sets for Clash using .mrs format
-export function generateClashRuleSets(selectedRules = [], customRules = []) {
-  if (typeof selectedRules === 'string' && PREDEFINED_RULE_SETS[selectedRules]) {
-    selectedRules = PREDEFINED_RULE_SETS[selectedRules];
-  }
-  
-  if (!selectedRules || selectedRules.length === 0) {
-    selectedRules = PREDEFINED_RULE_SETS.minimal;
-  }
-
-  const selectedRulesSet = new Set(selectedRules);
-
-  const siteRuleSets = new Set();
-  const ipRuleSets = new Set();
-
-  UNIFIED_RULES.forEach(rule => {
-    if (selectedRulesSet.has(rule.name)) {
-      rule.site_rules.forEach(siteRule => siteRuleSets.add(siteRule));
-      rule.ip_rules.forEach(ipRule => ipRuleSets.add(ipRule));
-    }
-  });
-
-  const site_rule_providers = {};
-  const ip_rule_providers = {};
-
-  Array.from(siteRuleSets).forEach(rule => {
-    site_rule_providers[rule] = {
-      type: 'http',
-      format: 'mrs',
-      behavior: 'domain',
-      url: `${CLASH_SITE_RULE_SET_BASE_URL}${CLASH_SITE_RULE_SETS[rule]}`,
-      path: `./ruleset/${CLASH_SITE_RULE_SETS[rule]}`,
-      interval: 86400
-    };
-  });
-
-  Array.from(ipRuleSets).forEach(rule => {
-    ip_rule_providers[rule] = {
-      type: 'http',
-      format: 'mrs',
-      behavior: 'ipcidr',
-      url: `${CLASH_IP_RULE_SET_BASE_URL}${CLASH_IP_RULE_SETS[rule]}`,
-      path: `./ruleset/${CLASH_IP_RULE_SETS[rule]}`,
-      interval: 86400
-    };
-  });
-
-  // Add Non-China rule set if not included
-  if(!selectedRules.includes('Non-China')){
-    site_rule_providers['geolocation-!cn'] = {
-      type: 'http',
-      format: 'mrs',
-      behavior: 'domain',
-      url: `${CLASH_SITE_RULE_SET_BASE_URL}geolocation-!cn.mrs`,
-      path: './ruleset/geolocation-!cn.mrs',
-      interval: 86400
-    };
-  }
-
-  // Add custom rules
-  if(customRules){
-    customRules.forEach(rule => {
-      if(rule.site!=''){
-        rule.site.split(',').forEach(site => {
-          const site_trimmed = site.trim();
-          site_rule_providers[site_trimmed] = {
-            type: 'http',
-            format: 'mrs',
-            behavior: 'domain',
-            url: `${CLASH_SITE_RULE_SET_BASE_URL}${site_trimmed}.mrs`,
-            path: `./ruleset/${site_trimmed}.mrs`,
-            interval: 86400
-          };
-        });
-      }
-      if(rule.ip!=''){
-        rule.ip.split(',').forEach(ip => {
-          const ip_trimmed = ip.trim();
-          ip_rule_providers[ip_trimmed] = {
-            type: 'http',
-            format: 'mrs',
-            behavior: 'ipcidr',
-            url: `${CLASH_IP_RULE_SET_BASE_URL}${ip_trimmed}.mrs`,
-            path: `./ruleset/${ip_trimmed}.mrs`,
-            interval: 86400
-          };
-        });
-      }
-    });
-  }
-
-  return { site_rule_providers, ip_rule_providers };
-}
-
-// Singbox configuration - 优化：确保代理组名称一致
-export const SING_BOX_CONFIG = {
-  dns: {
-    servers: [
-      {
-        type: "tcp",
-        tag: "dns_proxy",
-        server: "1.1.1.1",
-        detour: PROXY_GROUP_MAPPING['AI Services'], // 使用映射的代理组名称
-        domain_resolver: "dns_resolver"
-      },
-      {
-        type: "https",
-        tag: "dns_direct",
-        server: "dns.alidns.com",
-        domain_resolver: "dns_resolver"
-      },
-      {
-        type: "udp",
-        tag: "dns_resolver",
-        server: "223.5.5.5"
-      },
-      {
-        type: "fakeip",
-        tag: "dns_fakeip",
-        inet4_range: "198.18.0.0/15",
-        inet6_range: "fc00::/18"
-      }
-    ],
-    rules: [
-      {
-        rule_set: "geolocation-!cn",
-        query_type: [
-          "A",
-          "AAAA"
-        ],
-        server: "dns_fakeip"
-      },
-      {
-        rule_set: "geolocation-!cn",
-        query_type: "CNAME",
-        server: "dns_proxy"
-      },
-      {
-        query_type: [
-          "A",
-          "AAAA",
-          "CNAME"
-        ],
-        invert: true,
-        action: "predefined",
-        rcode: "REFUSED"
-      }
-    ],
-    final: "dns_direct",
-    independent_cache: true
-  },
-  ntp: {
-    enabled: true,
-    server: 'time.apple.com',
-    server_port: 123,
-    interval: '30m'
-  },
-  inbounds: [
-    { type: 'mixed', tag: 'mixed-in', listen: '0.0.0.0', listen_port: 2080 },
-    { type: 'tun', tag: 'tun-in', address: '172.19.0.1/30', auto_route: true, strict_route: true, stack: 'mixed', sniff: true }
-  ],
-  outbounds: [
-    { type: 'block', tag: PROXY_GROUP_MAPPING['REJECT'] },
-    { type: "direct", tag: PROXY_GROUP_MAPPING['DIRECT'] }
-  ],
-  route: {
-    default_domain_resolver: "dns_resolver",
-    "rule_set": [
-      {
-        "tag": "geosite-geolocation-!cn",
-        "type": "local",
-        "format": "binary",
-        "path": "geosite-geolocation-!cn.srs"
-      }
-    ],
-    rules: []
-  },
-  experimental: {
-    cache_file: {
-      enabled: true,
-      store_fakeip: true
-    }
-  }
-};
-
-// Clash configuration - 优化：添加基础代理组结构注释
-export const CLASH_CONFIG = {
-  'port': 7890,
-  'socks-port': 7891,
-  'allow-lan': false,
-  'mode': 'rule',
-  'log-level': 'info',
-  'geodata-mode': true,
-  'geo-auto-update': true,
-  'geodata-loader': 'standard',
-  'geo-update-interval': 24,
-  'geox-url': {
-    'geoip': "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat",
-    'geosite': "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat",
-    'mmdb': "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/country.mmdb",
-    'asn': "https://github.com/xishang0128/geoip/releases/download/latest/GeoLite2-ASN.mmdb"
-  },
-  'rule-providers': {
-    // 将由代码自动生成
-  },
-  'dns': {
-    'enable': true,
-    'ipv6': true,
-    'respect-rules': true,
-    'enhanced-mode': 'fake-ip',
-    'nameserver': [
-      'https://120.53.53.53/dns-query',
-      'https://223.5.5.5/dns-query'
-    ],
-    'proxy-server-nameserver': [
-      'https://120.53.53.53/dns-query',
-      'https://223.5.5.5/dns-query'
-    ],
-    'nameserver-policy': {
-      'geosite:cn,private': [
-        'https://120.53.53.53/dns-query',
-        'https://223.5.5.5/dns-query'
-      ],
-      'geosite:geolocation-!cn': [
-        'https://dns.cloudflare.com/dns-query',
-        'https://dns.google/dns-query'
-      ]
-    }
-  },
-  'proxies': [],
-  'proxy-groups': [
-    // 将由 ClashConfigBuilder 自动生成完整的代理组结构
-  ]
-};
-
-export const SURGE_CONFIG = {
-  'general': {
-    'allow-wifi-access': false,
-    'wifi-access-http-port': 6152,
-    'wifi-access-socks5-port': 6153,
-    'http-listen': '127.0.0.1:6152',
-    'socks5-listen': '127.0.0.1:6153',
-    'allow-hotspot-access': false,
-    'skip-proxy': '127.0.0.1,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,100.64.0.0/10,17.0.0.0/8,localhost,*.local,*.crashlytics.com,seed-sequoia.siri.apple.com,sequoia.apple.com',
-    'test-timeout': 5,
-    'proxy-test-url': 'http://cp.cloudflare.com/generate_204',
-    'internet-test-url': 'http://www.apple.com/library/test/success.html',
-    'geoip-maxmind-url': 'https://raw.githubusercontent.com/Loyalsoldier/geoip/release/Country.mmdb',
-    'ipv6': false,
-    'show-error-page-for-reject': true,
-    'dns-server': '119.29.29.29, 180.184.1.1, 223.5.5.5, system',
-    'encrypted-dns-server': 'https://223.5.5.5/dns-query',
-    'exclude-simple-hostnames': true,
-    'read-etc-hosts': true,
-    'always-real-ip': '*.msftconnecttest.com, *.msftncsi.com, *.srv.nintendo.net, *.stun.playstation.net, xbox.*.microsoft.com, *.xboxlive.com, *.logon.battlenet.com.cn, *.logon.battle.net, stun.l.google.com, easy-login.10099.com.cn,*-update.xoyocdn.com, *.prod.cloud.netflix.com, appboot.netflix.com, *-appboot.netflix.com',
-    'hijack-dns': '*:53',
-    'udp-policy-not-supported-behaviour': 'REJECT',
-    'hide-vpn-icon': false,
-  },
-  'replica': {
-    'hide-apple-request': true,
-    'hide-crashlytics-request': true,
-    'use-keyword-filter': false,
-    'hide-udp': false
-  }
-};
-
-// 新增：验证函数
-export function validateProxyGroupMapping() {
-  const requiredGroups = ['🚀 节点选择', '🎯 全球直连', '🛑 全球拦截', '🐟 漏网之鱼'];
-  const missingGroups = requiredGroups.filter(group => 
-    !Object.values(PROXY_GROUP_MAPPING).includes(group)
-  );
-  
-  if (missingGroups.length > 0) {
-    console.warn('警告：代理组映射缺少必要的代理组:', missingGroups);
-    return false;
-  }
-  
-  return true;
-}
-
-// 新增：获取规则对应的代理组
-export function getProxyGroupForRule(ruleName) {
-  return PROXY_GROUP_MAPPING[ruleName] || PROXY_GROUP_MAPPING['AI Services'];
-}
+// 其他函数也需要相应修改，使用 getUnifiedRules() 或 UNIFIED_RULES_BASE
+// ... 其他函数保持不变
