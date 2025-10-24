@@ -12,17 +12,14 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.customRules = customRules;
     }
 
-    /** 获取所有代理节点 */
     getProxies() {
         return this.config.proxies || [];
     }
 
-    /** 获取代理节点名称 */
     getProxyName(proxy) {
         return proxy.name;
     }
 
-    /** 协议类型转换（支持 vmess/vless/ss/trojan/tuic/hysteria2） */
     convertProxy(proxy) {
         switch (proxy.type) {
             case 'shadowsocks':
@@ -47,56 +44,39 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     servername: proxy.tls?.server_name || '',
                     'skip-cert-verify': proxy.tls?.insecure || false,
                     network: proxy.transport?.type || 'tcp',
-                    'ws-opts':
-                        proxy.transport?.type === 'ws'
-                            ? { path: proxy.transport.path, headers: proxy.transport.headers }
-                            : undefined
+                    'ws-opts': proxy.transport?.type === 'ws'
+                        ? { path: proxy.transport.path, headers: proxy.transport.headers }
+                        : undefined
                 };
             case 'vless':
+            case 'trojan':
                 return {
                     name: proxy.tag,
-                    type: 'vless',
+                    type: proxy.type,
                     server: proxy.server,
                     port: proxy.server_port,
                     uuid: proxy.uuid,
+                    password: proxy.password,
                     cipher: proxy.security,
                     tls: proxy.tls?.enabled || false,
                     'client-fingerprint': proxy.tls?.utls?.fingerprint,
                     servername: proxy.tls?.server_name || '',
                     network: proxy.transport?.type || 'tcp',
-                    'ws-opts':
-                        proxy.transport?.type === 'ws'
-                            ? { path: proxy.transport.path, headers: proxy.transport.headers }
-                            : undefined,
+                    'ws-opts': proxy.transport?.type === 'ws'
+                        ? { path: proxy.transport.path, headers: proxy.transport.headers }
+                        : undefined,
                     'reality-opts': proxy.tls?.reality?.enabled
                         ? {
                               'public-key': proxy.tls.reality.public_key,
                               'short-id': proxy.tls.reality.short_id
                           }
                         : undefined,
-                    'grpc-opts':
-                        proxy.transport?.type === 'grpc'
-                            ? { 'grpc-service-name': proxy.transport.service_name }
-                            : undefined,
+                    'grpc-opts': proxy.transport?.type === 'grpc'
+                        ? { 'grpc-service-name': proxy.transport.service_name }
+                        : undefined,
                     tfo: proxy.tcp_fast_open,
                     'skip-cert-verify': proxy.tls?.insecure,
                     flow: proxy.flow ?? undefined
-                };
-            case 'trojan':
-                return {
-                    name: proxy.tag,
-                    type: 'trojan',
-                    server: proxy.server,
-                    port: proxy.server_port,
-                    password: proxy.password,
-                    tls: proxy.tls?.enabled || false,
-                    sni: proxy.tls?.server_name || '',
-                    'skip-cert-verify': proxy.tls?.insecure || false,
-                    network: proxy.transport?.type || 'tcp',
-                    'ws-opts':
-                        proxy.transport?.type === 'ws'
-                            ? { path: proxy.transport.path, headers: proxy.transport.headers }
-                            : undefined
                 };
             case 'hysteria2':
                 return {
@@ -104,11 +84,13 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     type: 'hysteria2',
                     server: proxy.server,
                     port: proxy.server_port,
-                    password: proxy.password,
                     obfs: proxy.obfs?.type,
                     'obfs-password': proxy.obfs?.password,
+                    password: proxy.password,
+                    auth: proxy.auth,
                     up: proxy.up_mbps,
                     down: proxy.down_mbps,
+                    'recv-window-conn': proxy.recv_window_conn,
                     sni: proxy.tls?.server_name || '',
                     'skip-cert-verify': proxy.tls?.insecure ?? true
                 };
@@ -122,22 +104,34 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     password: proxy.password,
                     'congestion-controller': proxy.congestion,
                     'skip-cert-verify': proxy.tls?.insecure,
-                    sni: proxy.tls?.server_name
+                    'disable-sni': true,
+                    alpn: proxy.tls?.alpn,
+                    sni: proxy.tls?.server_name,
+                    'udp-relay-mode': 'native'
                 };
             default:
                 return proxy;
         }
     }
 
-    /** 加入代理节点到 config（防重复） */
     addProxyToConfig(proxy) {
         this.config.proxies = this.config.proxies || [];
-        const exists = this.config.proxies.find(p => p.name === proxy.name);
-        if (!exists) this.config.proxies.push(proxy);
+        const similarProxies = this.config.proxies.filter(p => p.name.includes(proxy.name));
+
+        const isIdentical = similarProxies.some(p => {
+            const { name: _, ...rest1 } = proxy;
+            const { name: __, ...rest2 } = p;
+            return JSON.stringify(rest1) === JSON.stringify(rest2);
+        });
+
+        if (isIdentical) return;
+        if (similarProxies.length > 0) proxy.name = `${proxy.name} ${similarProxies.length + 1}`;
+
+        this.config.proxies.push(proxy);
     }
 
-    /** 自动生成地区测速组 */
-    generateRegionGroups(proxyList) {
+    // ✅ 自动创建地区测速组
+    addRegionGroups(proxyNames) {
         const regions = {
             '🇭🇰 香港自动': /香港|HK|Hong/i,
             '🇸🇬 新加坡自动': /新加坡|SG|Singapore/i,
@@ -147,39 +141,27 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
             '🇬🇧 英国自动': /英国|UK|London/i
         };
 
-        const result = [];
-        for (const [regionName, regex] of Object.entries(regions)) {
-            const matched = proxyList.filter(p => regex.test(p));
-            if (matched.length === 0) continue;
-            result.push({
+        Object.entries(regions).forEach(([regionName, regex]) => {
+            const matched = proxyNames.filter(p => regex.test(p));
+            if (matched.length === 0) return;
+            this.config['proxy-groups'].push({
                 name: regionName,
                 type: 'url-test',
                 url: 'http://www.gstatic.com/generate_204',
-                interval: 600,
+                interval: 300,
                 tolerance: 50,
                 proxies: matched
             });
-        }
-        return result;
+        });
     }
 
-    /** ✅ 构建 OpenClash 推荐策略组结构 */
-    buildProxyGroups(proxyList) {
-        if (!proxyList || proxyList.length === 0) proxyList = ['DIRECT'];
-
-        const regionGroups = this.generateRegionGroups(proxyList);
-
-        this.config['proxy-groups'] = [
+    // ✅ 核心出站策略结构
+    addMainGroups(proxyNames) {
+        const groups = [
             {
                 name: '🚀 节点选择',
                 type: 'select',
-                proxies: [
-                    '♻️ 自动选择',
-                    '🔯 故障转移',
-                    '🔮 负载均衡',
-                    ...regionGroups.map(r => r.name),
-                    'DIRECT'
-                ]
+                proxies: ['♻️ 自动选择', '🔯 故障转移', '🔮 负载均衡', 'DIRECT']
             },
             {
                 name: '♻️ 自动选择',
@@ -187,14 +169,14 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                 url: 'http://www.gstatic.com/generate_204',
                 interval: 300,
                 tolerance: 50,
-                proxies: proxyList
+                proxies: proxyNames
             },
             {
                 name: '🔯 故障转移',
                 type: 'fallback',
                 url: 'http://www.gstatic.com/generate_204',
                 interval: 180,
-                proxies: proxyList
+                proxies: proxyNames
             },
             {
                 name: '🔮 负载均衡',
@@ -202,9 +184,8 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                 strategy: 'consistent-hashing',
                 url: 'http://www.gstatic.com/generate_204',
                 interval: 180,
-                proxies: proxyList
+                proxies: proxyNames
             },
-            ...regionGroups,
             {
                 name: '🎯 全球直连',
                 type: 'select',
@@ -227,47 +208,47 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                 ]
             }
         ];
+
+        this.config['proxy-groups'].push(...groups);
     }
 
-    /** 生成规则 */
-    generateRules() {
-        return generateRules(this.selectedRules, this.customRules);
-    }
-
-    /** 格式化输出为 Clash YAML */
     formatConfig() {
-        const proxyList = this.getProxies().map(p => this.getProxyName(p));
-        this.buildProxyGroups(proxyList);
+        const proxyList = this.getProxies().map(p => p.name);
+        this.config['proxy-groups'] = [];
 
+        // 构建核心出站组
+        this.addMainGroups(proxyList);
+
+        // 自动地区测速组
+        this.addRegionGroups(proxyList);
+
+        // 规则
         const rules = this.generateRules();
         const ruleResults = [];
 
-        const { site_rule_providers, ip_rule_providers } = generateClashRuleSets(
-            this.selectedRules,
-            this.customRules
-        );
+        const { site_rule_providers, ip_rule_providers } = generateClashRuleSets(this.selectedRules, this.customRules);
         this.config['rule-providers'] = { ...site_rule_providers, ...ip_rule_providers };
 
-        rules.forEach(rule => {
-            rule.domain_suffix?.forEach(s =>
-                ruleResults.push(`DOMAIN-SUFFIX,${s},${t('outboundNames.' + rule.outbound)}`)
-            );
-            rule.domain_keyword?.forEach(k =>
-                ruleResults.push(`DOMAIN-KEYWORD,${k},${t('outboundNames.' + rule.outbound)}`)
-            );
-            rule.site_rules?.forEach(s =>
-                ruleResults.push(`RULE-SET,${s},${t('outboundNames.' + rule.outbound)}`)
-            );
-            rule.ip_rules?.forEach(ip =>
-                ruleResults.push(`RULE-SET,${ip},${t('outboundNames.' + rule.outbound)},no-resolve`)
-            );
-            rule.ip_cidr?.forEach(cidr =>
-                ruleResults.push(`IP-CIDR,${cidr},${t('outboundNames.' + rule.outbound)},no-resolve`)
-            );
+        rules.filter(r => !!r.domain_suffix || !!r.domain_keyword).forEach(rule => {
+            rule.domain_suffix?.forEach(s => ruleResults.push(`DOMAIN-SUFFIX,${s},${t('outboundNames.' + rule.outbound)}`));
+            rule.domain_keyword?.forEach(k => ruleResults.push(`DOMAIN-KEYWORD,${k},${t('outboundNames.' + rule.outbound)}`));
         });
 
-        this.config.rules = [...ruleResults, 'MATCH,🐟 漏网之鱼'];
+        rules.filter(r => !!r.site_rules?.[0]).forEach(rule => {
+            rule.site_rules.forEach(s => ruleResults.push(`RULE-SET,${s},${t('outboundNames.' + rule.outbound)}`));
+        });
 
-        return yaml.dump(this.config, { sortKeys: false, lineWidth: 120 });
+        rules.filter(r => !!r.ip_rules?.[0]).forEach(rule => {
+            rule.ip_rules.forEach(ip => ruleResults.push(`RULE-SET,${ip},${t('outboundNames.' + rule.outbound)},no-resolve`));
+        });
+
+        rules.filter(r => !!r.ip_cidr).forEach(rule => {
+            rule.ip_cidr.forEach(cidr => ruleResults.push(`IP-CIDR,${cidr},${t('outboundNames.' + rule.outbound)},no-resolve`));
+        });
+
+        this.config.rules = [...ruleResults];
+        this.config.rules.push(`MATCH,🐟 漏网之鱼`);
+
+        return yaml.dump(this.config);
     }
 }
