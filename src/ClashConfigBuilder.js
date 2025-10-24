@@ -156,8 +156,74 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.config.proxies.push(proxy);
     }
 
-    // 💡 自动创建地区测速组
-    addRegionGroups(proxyList) {
+    // 🚀 新版出站组结构（统一生成）
+    addProxyGroups(proxyList) {
+        if (!proxyList || proxyList.length === 0) proxyList = ['DIRECT']; // 防止空代理警告
+
+        const regionGroups = this.generateRegionGroups(proxyList);
+
+        this.config['proxy-groups'] = [
+            {
+                name: '🚀 节点选择',
+                type: 'select',
+                proxies: [
+                    '♻️ 自动选择',
+                    '🔯 故障转移',
+                    '🔮 负载均衡',
+                    ...regionGroups.map(g => g.name),
+                    'DIRECT'
+                ]
+            },
+            {
+                name: '♻️ 自动选择',
+                type: 'url-test',
+                url: 'https://cp.cloudflare.com/generate_204',
+                interval: 300,
+                tolerance: 50,
+                proxies: proxyList
+            },
+            {
+                name: '🔯 故障转移',
+                type: 'fallback',
+                url: 'https://cp.cloudflare.com/generate_204',
+                interval: 180,
+                proxies: proxyList
+            },
+            {
+                name: '🔮 负载均衡',
+                type: 'load-balance',
+                strategy: 'consistent-hashing',
+                url: 'https://cp.cloudflare.com/generate_204',
+                interval: 180,
+                proxies: proxyList
+            },
+            ...regionGroups,
+            {
+                name: '🎯 全球直连',
+                type: 'select',
+                proxies: ['DIRECT', '🚀 节点选择', '♻️ 自动选择']
+            },
+            {
+                name: '🛑 全球拦截',
+                type: 'select',
+                proxies: ['REJECT', 'DIRECT']
+            },
+            {
+                name: '🐟 漏网之鱼',
+                type: 'select',
+                proxies: [
+                    '🚀 节点选择',
+                    '🎯 全球直连',
+                    '♻️ 自动选择',
+                    '🔯 故障转移',
+                    '🔮 负载均衡'
+                ]
+            }
+        ];
+    }
+
+    // 💡 地区测速组（自动识别）
+    generateRegionGroups(proxyList) {
         const regions = {
             '🇭🇰 香港自动': /香港|HK|Hong/i,
             '🇸🇬 新加坡自动': /新加坡|SG|Singapore/i,
@@ -167,99 +233,20 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
             '🇬🇧 英国自动': /英国|UK|London/i
         };
 
+        const result = [];
         for (const [regionName, regex] of Object.entries(regions)) {
             const matched = proxyList.filter(p => regex.test(p));
             if (matched.length === 0) continue;
-
-            this.config['proxy-groups'].push({
+            result.push({
                 name: regionName,
                 type: 'url-test',
-                proxies: matched,
                 url: 'https://cp.cloudflare.com/generate_204',
                 interval: 600,
                 tolerance: 50,
-                lazy: true
+                proxies: matched
             });
         }
-    }
-
-    addAutoSelectGroup(proxyList) {
-        const autoName = t('outboundNames.Auto Select');
-        if (this.config['proxy-groups']?.some(g => g.name === autoName)) return;
-
-        this.config['proxy-groups'] = this.config['proxy-groups'] || [];
-        this.config['proxy-groups'].push({
-            name: autoName,
-            type: 'url-test',
-            proxies: DeepCopy(proxyList),
-            url: 'https://cp.cloudflare.com/generate_204',
-            interval: 600,
-            tolerance: 50,
-            lazy: true
-        });
-    }
-
-    addNodeSelectGroup(proxyList) {
-        const autoSelect = t('outboundNames.Auto Select');
-        const nodeSelect = t('outboundNames.Node Select');
-
-        const merged = new Set([autoSelect, 'DIRECT', 'REJECT', ...proxyList]);
-        if (this.config['proxy-groups']?.some(g => g.name === nodeSelect)) return;
-
-        this.config['proxy-groups'].unshift({
-            type: 'select',
-            name: nodeSelect,
-            proxies: DeepCopy([...merged])
-        });
-    }
-
-    addOutboundGroups(outbounds, proxyList) {
-        const autoSelect = t('outboundNames.Auto Select');
-        const nodeSelect = t('outboundNames.Node Select');
-
-        outbounds.forEach(outbound => {
-            const outboundName = t(`outboundNames.${outbound}`);
-            if (outboundName !== nodeSelect) {
-                let optimized;
-                if (outboundName === t('outboundNames.国内服务') || outboundName === '🔒 国内服务') {
-                    optimized = ['DIRECT'];
-                } else {
-                    optimized = new Set([nodeSelect, autoSelect, 'DIRECT', 'REJECT', ...proxyList]);
-
-                    if (/media|stream|video|youtube|netflix/i.test(outbound)) {
-                        optimized = new Set(['🇭🇰 香港自动', '🇸🇬 新加坡自动', ...optimized]);
-                    } else if (/openai|chatgpt|ai/i.test(outbound)) {
-                        optimized = new Set(['🇸🇬 新加坡自动', '🇺🇸 美国自动', ...optimized]);
-                    }
-                }
-
-                this.config['proxy-groups'].push({
-                    type: 'select',
-                    name: outboundName,
-                    proxies: DeepCopy([...optimized])
-                });
-            }
-        });
-    }
-
-    addCustomRuleGroups(proxyList) {
-        if (Array.isArray(this.customRules)) {
-            this.customRules.forEach(rule => {
-                this.config['proxy-groups'].push({
-                    type: 'select',
-                    name: t(`outboundNames.${rule.name}`),
-                    proxies: [t('outboundNames.Node Select'), ...proxyList]
-                });
-            });
-        }
-    }
-
-    addFallBackGroup(proxyList) {
-        this.config['proxy-groups'].push({
-            type: 'select',
-            name: t('outboundNames.Fall Back'),
-            proxies: [t('outboundNames.Node Select'), ...proxyList]
-        });
+        return result;
     }
 
     generateRules() {
@@ -267,10 +254,16 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     }
 
     formatConfig() {
+        const proxyList = this.getProxies().map(p => this.getProxyName(p));
+        this.addProxyGroups(proxyList);
+
         const rules = this.generateRules();
         const ruleResults = [];
 
-        const { site_rule_providers, ip_rule_providers } = generateClashRuleSets(this.selectedRules, this.customRules);
+        const { site_rule_providers, ip_rule_providers } = generateClashRuleSets(
+            this.selectedRules,
+            this.customRules
+        );
         this.config['rule-providers'] = { ...site_rule_providers, ...ip_rule_providers };
 
         rules.filter(r => !!r.domain_suffix || !!r.domain_keyword).forEach(rule => {
@@ -291,8 +284,9 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         });
 
         this.config.rules = [...ruleResults];
-        this.config.rules.push(`MATCH,${t('outboundNames.Fall Back')}`);
+        this.config.rules.push(`MATCH,🐟 漏网之鱼`);
 
-        return yaml.dump(this.config);
+        // ✅ 美观 YAML 输出
+        return yaml.dump(this.config, { sortKeys: false, lineWidth: 120 });
     }
 }
