@@ -254,6 +254,6 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.config.rules = [...ruleResults];
         this.config.rules.push(`MATCH,${t('outboundNames.Fall Back')}`);
 
-        return yaml.dump(this.config);
+        return yaml.dump(this.config, { skipInvalid: true, forceQuotes: true });
     }
 }
