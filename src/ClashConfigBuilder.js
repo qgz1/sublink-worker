@@ -6,159 +6,106 @@ import { t } from './i18n/index.js';
 
 export class ClashConfigBuilder extends BaseConfigBuilder {
     constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent) {
-        if (!baseConfig) baseConfig = CLASH_CONFIG;
-        super(inputString, baseConfig, lang, userAgent);
-        this.selectedRules = selectedRules;
-        this.customRules = customRules;
+        super(inputString, baseConfig || CLASH_CONFIG, lang, userAgent);
+        this.selectedRules = selectedRules || [];
+        this.customRules = customRules || [];
+    }
+
+    // ---------- 工具函数 ----------
+    safe(value, fallback = '') {
+        return value === undefined || value === null ? fallback : value;
+    }
+
+    clean(obj) {
+        if (Array.isArray(obj)) return obj.map(o => this.clean(o)).filter(Boolean);
+        if (obj && typeof obj === 'object') {
+            const result = {};
+            for (const [k, v] of Object.entries(obj)) {
+                const cleaned = this.clean(v);
+                if (cleaned !== undefined && cleaned !== null) result[k] = cleaned;
+            }
+            return result;
+        }
+        if (typeof obj === 'number' && !isFinite(obj)) return undefined;
+        return obj;
     }
 
     getProxies() {
-        return this.config.proxies || [];
+        return Array.isArray(this.config.proxies) ? this.config.proxies : [];
     }
 
     getProxyName(proxy) {
-        return proxy.name;
+        return this.safe(proxy?.name, 'Unnamed');
     }
 
+    // ---------- 节点类型转换 ----------
     convertProxy(proxy) {
-        switch (proxy.type) {
-            case 'shadowsocks':
-                return {
-                    name: proxy.tag,
-                    type: 'ss',
-                    server: proxy.server,
-                    port: proxy.server_port,
-                    cipher: proxy.method,
-                    password: proxy.password
-                };
-            case 'vmess':
-                return {
-                    name: proxy.tag,
-                    type: proxy.type,
-                    server: proxy.server,
-                    port: proxy.server_port,
-                    uuid: proxy.uuid,
-                    alterId: proxy.alter_id,
-                    cipher: proxy.security,
-                    tls: proxy.tls?.enabled || false,
-                    servername: proxy.tls?.server_name || '',
-                    'skip-cert-verify': proxy.tls?.insecure || false,
-                    network: proxy.transport?.type || 'tcp',
-                    'ws-opts': proxy.transport?.type === 'ws'
-                        ? { path: proxy.transport.path, headers: proxy.transport.headers }
-                        : undefined
-                };
-            case 'vless':
-                return {
-                    name: proxy.tag,
-                    type: proxy.type,
-                    server: proxy.server,
-                    port: proxy.server_port,
-                    uuid: proxy.uuid,
-                    cipher: proxy.security,
-                    tls: proxy.tls?.enabled || false,
-                    'client-fingerprint': proxy.tls?.utls?.fingerprint,
-                    servername: proxy.tls?.server_name || '',
-                    network: proxy.transport?.type || 'tcp',
-                    'ws-opts': proxy.transport?.type === 'ws'
-                        ? { path: proxy.transport.path, headers: proxy.transport.headers }
-                        : undefined,
-                    'reality-opts': proxy.tls?.reality?.enabled
-                        ? {
-                              'public-key': proxy.tls.reality.public_key,
-                              'short-id': proxy.tls.reality.short_id
-                          }
-                        : undefined,
-                    'grpc-opts': proxy.transport?.type === 'grpc'
-                        ? { 'grpc-service-name': proxy.transport.service_name }
-                        : undefined,
-                    tfo: proxy.tcp_fast_open,
-                    'skip-cert-verify': proxy.tls?.insecure,
-                    flow: proxy.flow ?? undefined
-                };
-            case 'hysteria2':
-                return {
-                    name: proxy.tag,
-                    type: proxy.type,
-                    server: proxy.server,
-                    port: proxy.server_port,
-                    obfs: proxy.obfs?.type,
-                    'obfs-password': proxy.obfs?.password,
-                    password: proxy.password,
-                    auth: proxy.auth,
-                    up: proxy.up_mbps,
-                    down: proxy.down_mbps,
-                    'recv-window-conn': proxy.recv_window_conn,
-                    sni: proxy.tls?.server_name || '',
-                    'skip-cert-verify': proxy.tls?.insecure ?? true
-                };
-            case 'trojan':
-                return {
-                    name: proxy.tag,
-                    type: proxy.type,
-                    server: proxy.server,
-                    port: proxy.server_port,
-                    password: proxy.password,
-                    cipher: proxy.security,
-                    tls: proxy.tls?.enabled || false,
-                    'client-fingerprint': proxy.tls?.utls?.fingerprint,
-                    sni: proxy.tls?.server_name || '',
-                    network: proxy.transport?.type || 'tcp',
-                    'ws-opts': proxy.transport?.type === 'ws'
-                        ? { path: proxy.transport.path, headers: proxy.transport.headers }
-                        : undefined,
-                    'reality-opts': proxy.tls?.reality?.enabled
-                        ? {
-                              'public-key': proxy.tls.reality.public_key,
-                              'short-id': proxy.tls.reality.short_id
-                          }
-                        : undefined,
-                    'grpc-opts': proxy.transport?.type === 'grpc'
-                        ? { 'grpc-service-name': proxy.transport.service_name }
-                        : undefined,
-                    tfo: proxy.tcp_fast_open,
-                    'skip-cert-verify': proxy.tls?.insecure,
-                    flow: proxy.flow ?? undefined
-                };
-            case 'tuic':
-                return {
-                    name: proxy.tag,
-                    type: proxy.type,
-                    server: proxy.server,
-                    port: proxy.server_port,
-                    uuid: proxy.uuid,
-                    password: proxy.password,
-                    'congestion-controller': proxy.congestion,
-                    'skip-cert-verify': proxy.tls?.insecure,
-                    'disable-sni': true,
-                    alpn: proxy.tls?.alpn,
-                    sni: proxy.tls?.server_name,
-                    'udp-relay-mode': 'native'
-                };
-            default:
-                return proxy;
+        try {
+            switch (proxy.type) {
+                case 'shadowsocks':
+                    return {
+                        name: proxy.tag,
+                        type: 'ss',
+                        server: proxy.server,
+                        port: proxy.server_port,
+                        cipher: proxy.method,
+                        password: proxy.password
+                    };
+                case 'vmess':
+                    return {
+                        name: proxy.tag,
+                        type: proxy.type,
+                        server: proxy.server,
+                        port: proxy.server_port,
+                        uuid: proxy.uuid,
+                        alterId: proxy.alter_id,
+                        cipher: proxy.security,
+                        tls: !!proxy.tls?.enabled,
+                        servername: proxy.tls?.server_name || '',
+                        'skip-cert-verify': !!proxy.tls?.insecure,
+                        network: proxy.transport?.type || 'tcp',
+                        'ws-opts': proxy.transport?.type === 'ws'
+                            ? { path: proxy.transport.path, headers: proxy.transport.headers }
+                            : undefined
+                    };
+                case 'vless':
+                case 'trojan':
+                case 'tuic':
+                case 'hysteria2':
+                    return {
+                        name: proxy.tag,
+                        type: proxy.type,
+                        server: proxy.server,
+                        port: proxy.server_port,
+                        uuid: proxy.uuid,
+                        password: proxy.password,
+                        cipher: proxy.security,
+                        tls: !!proxy.tls?.enabled,
+                        sni: proxy.tls?.server_name || '',
+                        'skip-cert-verify': !!proxy.tls?.insecure,
+                        network: proxy.transport?.type || 'tcp'
+                    };
+                default:
+                    return proxy;
+            }
+        } catch (e) {
+            return { name: 'InvalidNode', type: 'ss', server: '0.0.0.0', port: 1, cipher: 'aes-128-gcm', password: 'error' };
         }
     }
 
     addProxyToConfig(proxy) {
-        this.config.proxies = this.config.proxies || [];
-        const similarProxies = this.config.proxies.filter(p => p.name.includes(proxy.name));
-
-        const isIdentical = similarProxies.some(p => {
-            const { name: _, ...rest1 } = proxy;
-            const { name: __, ...rest2 } = p;
-            return JSON.stringify(rest1) === JSON.stringify(rest2);
-        });
-
-        if (isIdentical) return;
-        if (similarProxies.length > 0) proxy.name = `${proxy.name} ${similarProxies.length + 1}`;
-
-        this.config.proxies.push(proxy);
+        try {
+            this.config.proxies = this.config.proxies || [];
+            const exist = this.config.proxies.find(p => p.name === proxy.name);
+            if (!exist) this.config.proxies.push(proxy);
+        } catch (e) {
+            console.warn('addProxyToConfig error:', e);
+        }
     }
 
-    // ------------------- 自动地区测速组 -------------------
+    // ---------- 自动分地区测速 ----------
     addRegionGroups(proxyList) {
-        const regions = {
+        const regionMap = {
             '🇭🇰 香港自动': /香港|HK|Hong/i,
             '🇸🇬 新加坡自动': /新加坡|SG|Singapore/i,
             '🇯🇵 日本自动': /日本|JP|Tokyo|Osaka/i,
@@ -169,12 +116,12 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
 
         this.config['proxy-groups'] = this.config['proxy-groups'] || [];
 
-        for (const [regionName, regex] of Object.entries(regions)) {
+        for (const [name, regex] of Object.entries(regionMap)) {
             const matched = proxyList.filter(p => regex.test(p));
             if (matched.length === 0) continue;
 
             this.config['proxy-groups'].push({
-                name: regionName,
+                name,
                 type: 'url-test',
                 proxies: matched,
                 url: 'https://cp.cloudflare.com/generate_204',
@@ -185,12 +132,12 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         }
     }
 
-    // 自动选择组
+    // ---------- 自动选择组 ----------
     addAutoSelectGroup(proxyList) {
-        const autoName = t('outboundNames.Auto Select') || '自动选择';
-        if (this.config['proxy-groups']?.some(g => g.name === autoName)) return;
+        const name = t('outboundNames.Auto Select') || '自动选择';
+        if (this.config['proxy-groups'].some(g => g.name === name)) return;
         this.config['proxy-groups'].push({
-            name: autoName,
+            name,
             type: 'url-test',
             proxies: DeepCopy(proxyList),
             url: 'https://cp.cloudflare.com/generate_204',
@@ -200,82 +147,77 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         });
     }
 
-    // 节点选择组
+    // ---------- 节点选择组 ----------
     addNodeSelectGroup(proxyList) {
-        const nodeSelect = t('outboundNames.Node Select') || '节点选择';
-        const autoSelect = t('outboundNames.Auto Select') || '自动选择';
-        const merged = new Set([autoSelect, 'DIRECT', 'REJECT', ...proxyList]);
+        const nodeName = t('outboundNames.Node Select') || '节点选择';
+        const autoName = t('outboundNames.Auto Select') || '自动选择';
+        const merged = new Set([autoName, 'DIRECT', 'REJECT', ...proxyList]);
 
         this.config['proxy-groups'].unshift({
             type: 'select',
-            name: nodeSelect,
+            name: nodeName,
             proxies: DeepCopy([...merged])
         });
     }
 
-    // ------------------- 规则生成器 -------------------
+    // ---------- 规则生成 ----------
     generateRules() {
         const result = [];
-        const { customRules = [], selectedRules = [] } = this;
-        const rules = [...selectedRules, ...customRules].filter(Boolean);
+        try {
+            const rules = [...(this.selectedRules || []), ...(this.customRules || [])].filter(Boolean);
 
-        rules.forEach(rule => {
-            const outbound = t('outboundNames.' + rule.outbound) || '节点选择';
-            rule.domain_suffix?.forEach(s => result.push(`DOMAIN-SUFFIX,${s},${outbound}`));
-            rule.domain_keyword?.forEach(k => result.push(`DOMAIN-KEYWORD,${k},${outbound}`));
-            rule.domain?.forEach(d => result.push(`DOMAIN,${d},${outbound}`));
-            rule.site_rules?.forEach(s => result.push(`RULE-SET,${s},${outbound}`));
-            rule.ip_rules?.forEach(ip => result.push(`RULE-SET,${ip},${outbound},no-resolve`));
-            rule.ip_cidr?.forEach(cidr => result.push(`IP-CIDR,${cidr},${outbound},no-resolve`));
-        });
+            for (const rule of rules) {
+                const outbound = t('outboundNames.' + rule.outbound) || '节点选择';
+                rule.domain_suffix?.forEach(s => result.push(`DOMAIN-SUFFIX,${s},${outbound}`));
+                rule.domain_keyword?.forEach(k => result.push(`DOMAIN-KEYWORD,${k},${outbound}`));
+                rule.domain?.forEach(d => result.push(`DOMAIN,${d},${outbound}`));
+                rule.site_rules?.forEach(s => result.push(`RULE-SET,${s},${outbound}`));
+                rule.ip_rules?.forEach(ip => result.push(`RULE-SET,${ip},${outbound},no-resolve`));
+                rule.ip_cidr?.forEach(c => result.push(`IP-CIDR,${c},${outbound},no-resolve`));
+            }
 
-        result.push(`GEOIP,CN,DIRECT`);
-        result.push(`MATCH,${t('outboundNames.Node Select') || '节点选择'}`);
-
+            result.push(`GEOIP,CN,DIRECT`);
+            result.push(`MATCH,${t('outboundNames.Node Select') || '节点选择'}`);
+        } catch (e) {
+            console.warn('generateRules error:', e);
+        }
         return Array.from(new Set(result.filter(Boolean)));
     }
 
-    // ------------------- 输出配置 -------------------
+    // ---------- 输出配置 ----------
     formatConfig() {
-        const rules = this.generateRules();
-        const { site_rule_providers, ip_rule_providers } =
-            generateClashRuleSets(this.selectedRules, this.customRules);
-
-        this.config['rule-providers'] = { ...site_rule_providers, ...ip_rule_providers };
-
-        const proxyList = this.getProxies().map(p => this.getProxyName(p));
-        this.config['proxy-groups'] = [];
-
-        this.addRegionGroups(proxyList);
-        this.addAutoSelectGroup(proxyList);
-        this.addNodeSelectGroup(proxyList);
-
-        this.config.rules = [...rules];
-
-        // 自动清理 undefined 防止 YAML 报错
-        const clean = obj => {
-            if (Array.isArray(obj)) return obj.map(clean).filter(Boolean);
-            if (obj && typeof obj === 'object') {
-                const r = {};
-                for (const [k, v] of Object.entries(obj)) {
-                    const c = clean(v);
-                    if (c !== undefined && c !== null) r[k] = c;
-                }
-                return r;
-            }
-            return obj;
-        };
-
-        this.config = clean(this.config);
-
         try {
-            return yaml.dump(this.config, {
-                skipInvalid: true,
-                sortKeys: false,
-                lineWidth: -1
-            });
-        } catch (e) {
-            return `# YAML Generate Error: ${e.message}\nproxies: []\nproxy-groups: []\nrules: []`;
+            const rules = this.generateRules();
+            const { site_rule_providers, ip_rule_providers } = generateClashRuleSets(this.selectedRules, this.customRules);
+
+            this.config['rule-providers'] = { ...site_rule_providers, ...ip_rule_providers };
+            const proxyList = this.getProxies().map(p => this.getProxyName(p));
+
+            this.config['proxy-groups'] = [];
+            this.addRegionGroups(proxyList);
+            this.addAutoSelectGroup(proxyList);
+            this.addNodeSelectGroup(proxyList);
+
+            this.config.rules = [...rules];
+
+            // 清理非法数据
+            this.config = this.clean(this.config);
+
+            // 强制生成安全 YAML
+            let yamlText = '';
+            try {
+                yamlText = yaml.dump(this.config, { skipInvalid: true, sortKeys: false, lineWidth: -1 });
+            } catch (err) {
+                yamlText = `# YAML Encode Error: ${err.message}\nproxies: []\nproxy-groups: []\nrules: []`;
+            }
+
+            if (!yamlText || yamlText.trim().length < 10) {
+                yamlText = `# Empty Output Fallback\nproxies: []\nproxy-groups: []\nrules: []`;
+            }
+
+            return yamlText;
+        } catch (err) {
+            return `# Fatal Error: ${err.message}\nproxies: []\nproxy-groups: []\nrules: []`;
         }
     }
 }
