@@ -12,21 +12,31 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.customRules = customRules;
     }
 
-    // ===========================
-    //   基础代理节点转换部分
-    // ===========================
-    getProxies() {
-        return this.config.proxies || [];
+    // --- 工具函数：去掉空字段 / 不兼容字段 ---
+    cleanObject(obj) {
+        if (obj && typeof obj === 'object') {
+            for (const key in obj) {
+                const value = obj[key];
+                // 删除空对象、undefined、null
+                if (value === undefined || value === null) {
+                    delete obj[key];
+                    continue;
+                }
+                if (typeof value === 'object') {
+                    this.cleanObject(value);
+                    if (Object.keys(value).length === 0) delete obj[key];
+                }
+            }
+        }
+        return obj;
     }
 
-    getProxyName(proxy) {
-        return proxy.name;
-    }
-
+    // --- 节点转换 ---
     convertProxy(proxy) {
+        let p;
         switch (proxy.type) {
             case 'shadowsocks':
-                return {
+                p = {
                     name: proxy.tag,
                     type: 'ss',
                     server: proxy.server,
@@ -34,134 +44,40 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     cipher: proxy.method,
                     password: proxy.password
                 };
+                break;
             case 'vmess':
-                return {
-                    name: proxy.tag,
-                    type: proxy.type,
-                    server: proxy.server,
-                    port: proxy.server_port,
-                    uuid: proxy.uuid,
-                    alterId: proxy.alter_id,
-                    cipher: proxy.security,
-                    tls: proxy.tls?.enabled || false,
-                    servername: proxy.tls?.server_name || '',
-                    'skip-cert-verify': proxy.tls?.insecure || false,
-                    network: proxy.transport?.type || 'tcp',
-                    'ws-opts': proxy.transport?.type === 'ws'
-                        ? { path: proxy.transport.path, headers: proxy.transport.headers }
-                        : undefined
-                };
             case 'vless':
-                return {
-                    name: proxy.tag,
-                    type: proxy.type,
-                    server: proxy.server,
-                    port: proxy.server_port,
-                    uuid: proxy.uuid,
-                    cipher: proxy.security,
-                    tls: proxy.tls?.enabled || false,
-                    'client-fingerprint': proxy.tls?.utls?.fingerprint,
-                    servername: proxy.tls?.server_name || '',
-                    network: proxy.transport?.type || 'tcp',
-                    'ws-opts': proxy.transport?.type === 'ws'
-                        ? { path: proxy.transport.path, headers: proxy.transport.headers }
-                        : undefined,
-                    'reality-opts': proxy.tls?.reality?.enabled
-                        ? {
-                              'public-key': proxy.tls.reality.public_key,
-                              'short-id': proxy.tls.reality.short_id
-                          }
-                        : undefined,
-                    'grpc-opts': proxy.transport?.type === 'grpc'
-                        ? { 'grpc-service-name': proxy.transport.service_name }
-                        : undefined,
-                    tfo: proxy.tcp_fast_open,
-                    'skip-cert-verify': proxy.tls?.insecure,
-                    flow: proxy.flow ?? undefined
-                };
-            case 'hysteria2':
-                return {
-                    name: proxy.tag,
-                    type: proxy.type,
-                    server: proxy.server,
-                    port: proxy.server_port,
-                    obfs: proxy.obfs?.type,
-                    'obfs-password': proxy.obfs?.password,
-                    password: proxy.password,
-                    auth: proxy.auth,
-                    up: proxy.up_mbps,
-                    down: proxy.down_mbps,
-                    'recv-window-conn': proxy.recv_window_conn,
-                    sni: proxy.tls?.server_name || '',
-                    'skip-cert-verify': proxy.tls?.insecure ?? true
-                };
             case 'trojan':
-                return {
-                    name: proxy.tag,
-                    type: proxy.type,
-                    server: proxy.server,
-                    port: proxy.server_port,
-                    password: proxy.password,
-                    cipher: proxy.security,
-                    tls: proxy.tls?.enabled || false,
-                    'client-fingerprint': proxy.tls?.utls?.fingerprint,
-                    sni: proxy.tls?.server_name || '',
-                    network: proxy.transport?.type || 'tcp',
-                    'ws-opts': proxy.transport?.type === 'ws'
-                        ? { path: proxy.transport.path, headers: proxy.transport.headers }
-                        : undefined,
-                    'reality-opts': proxy.tls?.reality?.enabled
-                        ? {
-                              'public-key': proxy.tls.reality.public_key,
-                              'short-id': proxy.tls.reality.short_id
-                          }
-                        : undefined,
-                    'grpc-opts': proxy.transport?.type === 'grpc'
-                        ? { 'grpc-service-name': proxy.transport.service_name }
-                        : undefined,
-                    tfo: proxy.tcp_fast_open,
-                    'skip-cert-verify': proxy.tls?.insecure,
-                    flow: proxy.flow ?? undefined
-                };
             case 'tuic':
-                return {
-                    name: proxy.tag,
-                    type: proxy.type,
-                    server: proxy.server,
-                    port: proxy.server_port,
-                    uuid: proxy.uuid,
-                    password: proxy.password,
-                    'congestion-controller': proxy.congestion,
-                    'skip-cert-verify': proxy.tls?.insecure,
-                    'disable-sni': true,
-                    alpn: proxy.tls?.alpn,
-                    sni: proxy.tls?.server_name,
-                    'udp-relay-mode': 'native'
-                };
+            case 'hysteria2':
+                p = DeepCopy(proxy);
+                p.name = proxy.tag;
+                p.port = proxy.server_port;
+                delete p.tag;
+                delete p.server_port;
+                break;
             default:
-                return proxy;
+                p = proxy;
         }
+        return this.cleanObject(p);
     }
 
     addProxyToConfig(proxy) {
         this.config.proxies = this.config.proxies || [];
-        const similarProxies = this.config.proxies.filter(p => p.name.includes(proxy.name));
+        const similar = this.config.proxies.filter(p => p.name.includes(proxy.name));
 
-        const isIdentical = similarProxies.some(p => {
+        const isIdentical = similar.some(p => {
             const { name: _, ...rest1 } = proxy;
             const { name: __, ...rest2 } = p;
             return JSON.stringify(rest1) === JSON.stringify(rest2);
         });
-
         if (isIdentical) return;
-        if (similarProxies.length > 0) proxy.name = `${proxy.name} ${similarProxies.length + 1}`;
 
+        if (similar.length > 0) proxy.name = `${proxy.name} ${similar.length + 1}`;
         this.config.proxies.push(proxy);
     }
 
-    // ===========================
-    // 🔧 简化代理组逻辑部分
-    // ===========================
+    // --- 新增统一代理组构建函数 ---
     addProxyGroups(proxyList) {
         this.config['proxy-groups'] = [];
 
@@ -169,14 +85,14 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         const autoSelect = t('outboundNames.Auto Select');
         const fallBack = t('outboundNames.Fall Back');
 
-        // ① 节点选择组（手动）
+        // ① 手动选择
         this.config['proxy-groups'].push({
             name: nodeSelect,
             type: 'select',
             proxies: ['DIRECT', 'REJECT', autoSelect, ...proxyList]
         });
 
-        // ② 自动测速组（全局测速）
+        // ② 自动测速
         this.config['proxy-groups'].push({
             name: autoSelect,
             type: 'url-test',
@@ -220,13 +136,12 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         });
     }
 
-    // ===========================
-    //   规则部分保持不变
-    // ===========================
+    // --- 生成规则 ---
     generateRules() {
         return generateRules(this.selectedRules, this.customRules);
     }
 
+    // --- 最终输出 ---
     formatConfig() {
         const rules = this.generateRules();
         const ruleResults = [];
@@ -254,6 +169,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.config.rules = [...ruleResults];
         this.config.rules.push(`MATCH,${t('outboundNames.Fall Back')}`);
 
-        return yaml.dump(this.config, { skipInvalid: true, forceQuotes: true });
+        // ✅ 安全 YAML 输出
+        return yaml.dump(this.cleanObject(this.config), { skipInvalid: true, forceQuotes: true });
     }
 }
