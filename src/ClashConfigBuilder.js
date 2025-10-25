@@ -11,7 +11,6 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.customRules = customRules || [];
     }
 
-    // ---------- 工具函数 ----------
     safe(value, fallback = '') {
         return value === undefined || value === null ? fallback : value;
     }
@@ -38,19 +37,11 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         return this.safe(proxy?.name, 'Unnamed');
     }
 
-    // ---------- 节点类型转换 ----------
     convertProxy(proxy) {
         try {
             switch (proxy.type) {
                 case 'shadowsocks':
-                    return {
-                        name: proxy.tag,
-                        type: 'ss',
-                        server: proxy.server,
-                        port: proxy.server_port,
-                        cipher: proxy.method,
-                        password: proxy.password
-                    };
+                    return { name: proxy.tag, type: 'ss', server: proxy.server, port: proxy.server_port, cipher: proxy.method, password: proxy.password };
                 case 'vmess':
                     return {
                         name: proxy.tag,
@@ -64,26 +55,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                         servername: proxy.tls?.server_name || '',
                         'skip-cert-verify': !!proxy.tls?.insecure,
                         network: proxy.transport?.type || 'tcp',
-                        'ws-opts': proxy.transport?.type === 'ws'
-                            ? { path: proxy.transport.path, headers: proxy.transport.headers }
-                            : undefined
-                    };
-                case 'vless':
-                case 'trojan':
-                case 'tuic':
-                case 'hysteria2':
-                    return {
-                        name: proxy.tag,
-                        type: proxy.type,
-                        server: proxy.server,
-                        port: proxy.server_port,
-                        uuid: proxy.uuid,
-                        password: proxy.password,
-                        cipher: proxy.security,
-                        tls: !!proxy.tls?.enabled,
-                        sni: proxy.tls?.server_name || '',
-                        'skip-cert-verify': !!proxy.tls?.insecure,
-                        network: proxy.transport?.type || 'tcp'
+                        'ws-opts': proxy.transport?.type === 'ws' ? { path: proxy.transport.path, headers: proxy.transport.headers } : undefined
                     };
                 default:
                     return proxy;
@@ -98,12 +70,9 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
             this.config.proxies = this.config.proxies || [];
             const exist = this.config.proxies.find(p => p.name === proxy.name);
             if (!exist) this.config.proxies.push(proxy);
-        } catch (e) {
-            console.warn('addProxyToConfig error:', e);
-        }
+        } catch {}
     }
 
-    // ---------- 自动分地区测速 ----------
     addRegionGroups(proxyList) {
         const regionMap = {
             '🇭🇰 香港自动': /香港|HK|Hong/i,
@@ -119,7 +88,6 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         for (const [name, regex] of Object.entries(regionMap)) {
             const matched = proxyList.filter(p => regex.test(p));
             if (matched.length === 0) continue;
-
             this.config['proxy-groups'].push({
                 name,
                 type: 'url-test',
@@ -132,7 +100,6 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         }
     }
 
-    // ---------- 自动选择组 ----------
     addAutoSelectGroup(proxyList) {
         const name = t('outboundNames.Auto Select') || '自动选择';
         if (this.config['proxy-groups'].some(g => g.name === name)) return;
@@ -147,12 +114,10 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         });
     }
 
-    // ---------- 节点选择组 ----------
     addNodeSelectGroup(proxyList) {
         const nodeName = t('outboundNames.Node Select') || '节点选择';
         const autoName = t('outboundNames.Auto Select') || '自动选择';
         const merged = new Set([autoName, 'DIRECT', 'REJECT', ...proxyList]);
-
         this.config['proxy-groups'].unshift({
             type: 'select',
             name: nodeName,
@@ -160,12 +125,10 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         });
     }
 
-    // ---------- 规则生成 ----------
     generateRules() {
         const result = [];
         try {
             const rules = [...(this.selectedRules || []), ...(this.customRules || [])].filter(Boolean);
-
             for (const rule of rules) {
                 const outbound = t('outboundNames.' + rule.outbound) || '节点选择';
                 rule.domain_suffix?.forEach(s => result.push(`DOMAIN-SUFFIX,${s},${outbound}`));
@@ -175,46 +138,33 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                 rule.ip_rules?.forEach(ip => result.push(`RULE-SET,${ip},${outbound},no-resolve`));
                 rule.ip_cidr?.forEach(c => result.push(`IP-CIDR,${c},${outbound},no-resolve`));
             }
-
             result.push(`GEOIP,CN,DIRECT`);
             result.push(`MATCH,${t('outboundNames.Node Select') || '节点选择'}`);
-        } catch (e) {
-            console.warn('generateRules error:', e);
-        }
+        } catch {}
         return Array.from(new Set(result.filter(Boolean)));
     }
 
-    // ---------- 输出配置 ----------
     formatConfig() {
         try {
             const rules = this.generateRules();
             const { site_rule_providers, ip_rule_providers } = generateClashRuleSets(this.selectedRules, this.customRules);
-
             this.config['rule-providers'] = { ...site_rule_providers, ...ip_rule_providers };
             const proxyList = this.getProxies().map(p => this.getProxyName(p));
-
             this.config['proxy-groups'] = [];
             this.addRegionGroups(proxyList);
             this.addAutoSelectGroup(proxyList);
             this.addNodeSelectGroup(proxyList);
-
             this.config.rules = [...rules];
-
-            // 清理非法数据
             this.config = this.clean(this.config);
-
-            // 强制生成安全 YAML
             let yamlText = '';
             try {
                 yamlText = yaml.dump(this.config, { skipInvalid: true, sortKeys: false, lineWidth: -1 });
             } catch (err) {
                 yamlText = `# YAML Encode Error: ${err.message}\nproxies: []\nproxy-groups: []\nrules: []`;
             }
-
             if (!yamlText || yamlText.trim().length < 10) {
                 yamlText = `# Empty Output Fallback\nproxies: []\nproxy-groups: []\nrules: []`;
             }
-
             return yamlText;
         } catch (err) {
             return `# Fatal Error: ${err.message}\nproxies: []\nproxy-groups: []\nrules: []`;
