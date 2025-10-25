@@ -156,10 +156,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.config.proxies.push(proxy);
     }
 
-    // ===========================
-    // 🔧 优化后的代理组逻辑部分
-    // ===========================
-
+    // 💡 自动创建地区测速组
     addRegionGroups(proxyList) {
         const regions = {
             '🇭🇰 香港自动': /香港|HK|Hong/i,
@@ -170,15 +167,12 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
             '🇬🇧 英国自动': /英国|UK|London/i
         };
 
-        this.config['proxy-groups'] = this.config['proxy-groups'] || [];
-
-        for (const [name, regex] of Object.entries(regions)) {
+        for (const [regionName, regex] of Object.entries(regions)) {
             const matched = proxyList.filter(p => regex.test(p));
-            if (!matched.length) continue;
-            if (this.config['proxy-groups'].some(g => g.name === name)) continue;
+            if (matched.length === 0) continue;
 
             this.config['proxy-groups'].push({
-                name,
+                name: regionName,
                 type: 'url-test',
                 proxies: matched,
                 url: 'https://cp.cloudflare.com/generate_204',
@@ -190,13 +184,14 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     }
 
     addAutoSelectGroup(proxyList) {
-        const name = t('outboundNames.Auto Select');
-        if (this.config['proxy-groups']?.some(g => g.name === name)) return;
+        const autoName = t('outboundNames.Auto Select');
+        if (this.config['proxy-groups']?.some(g => g.name === autoName)) return;
 
+        this.config['proxy-groups'] = this.config['proxy-groups'] || [];
         this.config['proxy-groups'].push({
-            name,
+            name: autoName,
             type: 'url-test',
-            proxies: [...new Set(proxyList)],
+            proxies: DeepCopy(proxyList),
             url: 'https://cp.cloudflare.com/generate_204',
             interval: 600,
             tolerance: 50,
@@ -207,88 +202,65 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     addNodeSelectGroup(proxyList) {
         const autoSelect = t('outboundNames.Auto Select');
         const nodeSelect = t('outboundNames.Node Select');
+
+        const merged = new Set([autoSelect, 'DIRECT', 'REJECT', ...proxyList]);
         if (this.config['proxy-groups']?.some(g => g.name === nodeSelect)) return;
 
-        const proxies = ['DIRECT', 'REJECT', autoSelect, ...proxyList];
         this.config['proxy-groups'].unshift({
             type: 'select',
             name: nodeSelect,
-            proxies: [...new Set(proxies)]
+            proxies: DeepCopy([...merged])
         });
     }
 
     addOutboundGroups(outbounds, proxyList) {
-        const nodeSelect = t('outboundNames.Node Select');
         const autoSelect = t('outboundNames.Auto Select');
+        const nodeSelect = t('outboundNames.Node Select');
 
-        const hk = '🇭🇰 香港自动';
-        const sg = '🇸🇬 新加坡自动';
-        const us = '🇺🇸 美国自动';
+        outbounds.forEach(outbound => {
+            const outboundName = t(`outboundNames.${outbound}`);
+            if (outboundName !== nodeSelect) {
+                let optimized;
+                if (outboundName === t('outboundNames.国内服务') || outboundName === '🔒 国内服务') {
+                    optimized = ['DIRECT'];
+                } else {
+                    optimized = new Set([nodeSelect, autoSelect, 'DIRECT', 'REJECT', ...proxyList]);
 
-        const regionPriority = {
-            media: [hk, sg],
-            stream: [hk, sg],
-            video: [hk, sg],
-            youtube: [hk, sg],
-            netflix: [hk, sg],
-            openai: [sg, us],
-            chatgpt: [sg, us],
-            ai: [sg, us]
-        };
-
-        for (const outbound of outbounds) {
-            const name = t(`outboundNames.${outbound}`);
-            if (this.config['proxy-groups'].some(g => g.name === name)) continue;
-
-            let proxies = [nodeSelect, autoSelect, 'DIRECT', 'REJECT', ...proxyList];
-            if (/国内|cn|china/i.test(outbound)) proxies = ['DIRECT'];
-
-            for (const [key, regions] of Object.entries(regionPriority)) {
-                if (new RegExp(key, 'i').test(outbound)) {
-                    proxies = [...regions, ...proxies];
-                    break;
+                    if (/media|stream|video|youtube|netflix/i.test(outbound)) {
+                        optimized = new Set(['🇭🇰 香港自动', '🇸🇬 新加坡自动', ...optimized]);
+                    } else if (/openai|chatgpt|ai/i.test(outbound)) {
+                        optimized = new Set(['🇸🇬 新加坡自动', '🇺🇸 美国自动', ...optimized]);
+                    }
                 }
-            }
 
-            this.config['proxy-groups'].push({
-                type: 'select',
-                name,
-                proxies: [...new Set(proxies)]
-            });
-        }
+                this.config['proxy-groups'].push({
+                    type: 'select',
+                    name: outboundName,
+                    proxies: DeepCopy([...optimized])
+                });
+            }
+        });
     }
 
     addCustomRuleGroups(proxyList) {
-        if (!Array.isArray(this.customRules)) return;
-        const nodeSelect = t('outboundNames.Node Select');
-
-        for (const rule of this.customRules) {
-            const name = t(`outboundNames.${rule.name}`);
-            if (this.config['proxy-groups'].some(g => g.name === name)) continue;
-
-            this.config['proxy-groups'].push({
-                type: 'select',
-                name,
-                proxies: [nodeSelect, ...proxyList]
+        if (Array.isArray(this.customRules)) {
+            this.customRules.forEach(rule => {
+                this.config['proxy-groups'].push({
+                    type: 'select',
+                    name: t(`outboundNames.${rule.name}`),
+                    proxies: [t('outboundNames.Node Select'), ...proxyList]
+                });
             });
         }
     }
 
     addFallBackGroup(proxyList) {
-        const name = t('outboundNames.Fall Back');
-        if (this.config['proxy-groups']?.some(g => g.name === name)) return;
-
-        const nodeSelect = t('outboundNames.Node Select');
         this.config['proxy-groups'].push({
             type: 'select',
-            name,
-            proxies: [nodeSelect, ...proxyList]
+            name: t('outboundNames.Fall Back'),
+            proxies: [t('outboundNames.Node Select'), ...proxyList]
         });
     }
-
-    // ===========================
-    // 规则生成部分保持不变
-    // ===========================
 
     generateRules() {
         return generateRules(this.selectedRules, this.customRules);
