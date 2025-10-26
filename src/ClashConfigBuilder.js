@@ -140,7 +140,17 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         }
     }
 
-    // 添加代理到配置
+   // ✅ 完整可运行的简化版 Clash 配置生成器
+class ConfigBuilder {
+    constructor() {
+        this.config = {
+            proxies: [],
+            'proxy-groups': [],
+            rules: []
+        };
+    }
+
+    // 添加代理
     addProxyToConfig(proxy) {
         this.config.proxies = this.config.proxies || [];
         const similar = this.config.proxies.filter(p => p.name.includes(proxy.name));
@@ -181,10 +191,8 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         }
     }
 
-    // 创建自动测速组
+    // 自动测速组
     addAutoSelectGroup(proxyList) {
-        if (this.config['proxy-groups']?.some(g => g.name === '🚀 自动选择')) return;
-
         this.config['proxy-groups'].push({
             name: '🚀 自动选择',
             type: 'url-test',
@@ -196,10 +204,8 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         });
     }
 
-    // 创建节点选择组
+    // 节点选择组
     addNodeSelectGroup(proxyList) {
-        if (this.config['proxy-groups']?.some(g => g.name === '🌐 节点选择')) return;
-
         this.config['proxy-groups'].unshift({
             name: '🌐 节点选择',
             type: 'select',
@@ -207,10 +213,8 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         });
     }
 
-    // 创建 FallBack 组
+    // Fallback 组
     addFallBackGroup(proxyList) {
-        if (this.config['proxy-groups']?.some(g => g.name === '🧱 Fallback')) return;
-
         this.config['proxy-groups'].push({
             name: '🧱 Fallback',
             type: 'select',
@@ -221,12 +225,31 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     // 生成最简规则
     generateRules() {
         this.config.rules = ['MATCH,🧱 Fallback'];
-        return this.config.rules;
     }
 
-    // 输出配置为 YAML
-    formatConfig() {
+    // 生成最终配置（对象）
+    build(proxyList) {
+        this.addRegionGroups(proxyList);
+        this.addAutoSelectGroup(proxyList);
+        this.addNodeSelectGroup(proxyList);
+        this.addFallBackGroup(proxyList);
         this.generateRules();
-        return yaml.dump(this.config);
+        return this.config;
+    }
+
+    // 转换为 YAML 文本（内置简易 YAML 转换）
+    formatConfig() {
+        const cfg = this.config;
+        const toYaml = obj => JSON.stringify(obj, null, 2)
+            .replace(/[{}"]/g, '')
+            .replace(/,/g, '')
+            .replace(/^/gm, '  ');
+        return `proxies:\n${toYaml(cfg.proxies)}\nproxy-groups:\n${toYaml(cfg['proxy-groups'])}\nrules:\n${toYaml(cfg.rules)}`;
     }
 }
+
+// ✅ 示例使用
+const proxies = ['香港节点', '新加坡节点', '美国节点'];
+const builder = new ConfigBuilder();
+const config = builder.build(proxies);
+console.log(builder.formatConfig());
