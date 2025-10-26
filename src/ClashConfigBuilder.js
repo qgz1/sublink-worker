@@ -140,12 +140,32 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         }
     }
 
-    addProxy(proxy) {
-        if (!this.config.proxies.some(p => JSON.stringify(p) === JSON.stringify(proxy))) {
-            this.config.proxies.push(proxy);
-        }
+    class ConfigBuilder {
+    constructor() {
+        this.config = {
+            proxies: [],
+            'proxy-groups': [],
+            rules: []
+        };
     }
 
+    // 添加代理到配置
+    addProxyToConfig(proxy) {
+        this.config.proxies = this.config.proxies || [];
+        const similar = this.config.proxies.filter(p => p.name.includes(proxy.name));
+
+        const isIdentical = similar.some(p => {
+            const { name: _, ...a } = proxy;
+            const { name: __, ...b } = p;
+            return JSON.stringify(a) === JSON.stringify(b);
+        });
+
+        if (isIdentical) return;
+        if (similar.length > 0) proxy.name = `${proxy.name} ${similar.length + 1}`;
+        this.config.proxies.push(proxy);
+    }
+
+    // 自动创建地区测速组（可选）
     addRegionGroups(proxyList) {
         const regions = {
             '🇭🇰 香港自动': /香港|HK|Hong/i,
@@ -157,6 +177,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         for (const [name, regex] of Object.entries(regions)) {
             const matched = proxyList.filter(p => regex.test(p));
             if (matched.length === 0) continue;
+
             this.config['proxy-groups'].push({
                 name,
                 type: 'url-test',
@@ -169,7 +190,10 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         }
     }
 
-    addAutoGroup(proxyList) {
+    // 创建自动测速组
+    addAutoSelectGroup(proxyList) {
+        if (this.config['proxy-groups']?.some(g => g.name === '🚀 自动选择')) return;
+
         this.config['proxy-groups'].push({
             name: '🚀 自动选择',
             type: 'url-test',
@@ -181,7 +205,10 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         });
     }
 
+    // 创建节点选择组
     addNodeSelectGroup(proxyList) {
+        if (this.config['proxy-groups']?.some(g => g.name === '🌐 节点选择')) return;
+
         this.config['proxy-groups'].unshift({
             name: '🌐 节点选择',
             type: 'select',
@@ -189,7 +216,10 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         });
     }
 
+    // 创建 FallBack 组
     addFallBackGroup(proxyList) {
+        if (this.config['proxy-groups']?.some(g => g.name === '🧱 Fallback')) return;
+
         this.config['proxy-groups'].push({
             name: '🧱 Fallback',
             type: 'select',
@@ -197,18 +227,15 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         });
     }
 
-    generateBasicRules() {
-        this.config.rules = [
-            'MATCH,🧱 Fallback'
-        ];
+    // 生成最简规则
+    generateRules() {
+        this.config.rules = ['MATCH,🧱 Fallback'];
+        return this.config.rules;
     }
 
-    build(proxyList) {
-        this.addRegionGroups(proxyList);
-        this.addAutoGroup(proxyList);
-        this.addNodeSelectGroup(proxyList);
-        this.addFallBackGroup(proxyList);
-        this.generateBasicRules();
-        return this.config;
+    // 输出配置为 YAML
+    formatConfig() {
+        this.generateRules();
+        return yaml.dump(this.config);
     }
 }
