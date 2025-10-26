@@ -4,7 +4,7 @@ import { BaseConfigBuilder } from './BaseConfigBuilder.js';
 import { DeepCopy } from './utils.js';
 import { t } from './i18n/index.js';
 
-// ⬇️ 保持 ClashConfigBuilder 的原始定义
+// 保持 ClashConfigBuilder 的原始定义
 export class ClashConfigBuilder extends BaseConfigBuilder {
     constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent) {
         if (!baseConfig) baseConfig = CLASH_CONFIG;
@@ -13,22 +13,77 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.customRules = customRules;
     }
 
-    // 其他方法...
+    // 获取代理列表
     getProxies() {
         return this.config.proxies || [];
     }
 
+    // 获取代理名称
     getProxyName(proxy) {
         return proxy.name;
     }
 
+    // 转换代理配置（例：shadowsocks, vmess, trojan 等）
     convertProxy(proxy) {
-        // ... 省略具体实现
+        switch (proxy.type) {
+            case 'shadowsocks':
+                return {
+                    name: proxy.tag,
+                    type: 'ss',
+                    server: proxy.server,
+                    port: proxy.server_port,
+                    cipher: proxy.method,
+                    password: proxy.password
+                };
+            case 'vmess':
+                return {
+                    name: proxy.tag,
+                    type: proxy.type,
+                    server: proxy.server,
+                    port: proxy.server_port,
+                    uuid: proxy.uuid,
+                    alterId: proxy.alter_id,
+                    cipher: proxy.security,
+                    tls: proxy.tls?.enabled || false,
+                    servername: proxy.tls?.server_name || '',
+                    'skip-cert-verify': proxy.tls?.insecure || false,
+                    network: proxy.transport?.type || 'tcp',
+                    'ws-opts': proxy.transport?.type === 'ws'
+                        ? { path: proxy.transport.path, headers: proxy.transport.headers }
+                        : undefined
+                };
+            case 'trojan':
+                return {
+                    name: proxy.tag,
+                    type: proxy.type,
+                    server: proxy.server,
+                    port: proxy.server_port,
+                    password: proxy.password,
+                    cipher: proxy.security,
+                    tls: proxy.tls?.enabled || false,
+                    'client-fingerprint': proxy.tls?.utls?.fingerprint,
+                    sni: proxy.tls?.server_name || '',
+                    network: proxy.transport?.type || 'tcp',
+                    'ws-opts': proxy.transport?.type === 'ws'
+                        ? { path: proxy.transport.path, headers: proxy.transport.headers }
+                        : undefined,
+                    'reality-opts': proxy.tls?.reality?.enabled
+                        ? {
+                            'public-key': proxy.tls.reality.public_key,
+                            'short-id': proxy.tls.reality.short_id
+                        }
+                        : undefined
+                };
+            default:
+                return proxy;
+        }
     }
+
+    // 你可以继续添加其他方法...
 }
 
-// ⬇️ 将 ConfigBuilder 类放在 ClashConfigBuilder 外部，且保持它们在同一文件中
-class ConfigBuilder {
+// 新增：ConfigBuilder 类保持与 ClashConfigBuilder 同级，不嵌套
+export class ConfigBuilder {
     constructor() {
         this.config = {
             proxies: [],
