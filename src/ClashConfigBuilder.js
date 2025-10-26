@@ -140,15 +140,6 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         }
     }
 
-    class ConfigBuilder {
-    constructor() {
-        this.config = {
-            proxies: [],
-            'proxy-groups': [],
-            rules: []
-        };
-    }
-
     // 添加代理到配置
     addProxyToConfig(proxy) {
         this.config.proxies = this.config.proxies || [];
