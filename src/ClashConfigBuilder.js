@@ -5,19 +5,22 @@ import { DeepCopy } from './utils.js';
 import { t } from './i18n/index.js';
 
 export class ClashConfigBuilder extends BaseConfigBuilder {
-    constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent) {
+    // 新增最后一个参数 simplifyGroups（默认 false）
+    constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent, simplifyGroups = false) {
         if (!baseConfig) baseConfig = CLASH_CONFIG;
         super(inputString, baseConfig, lang, userAgent);
         this.selectedRules = selectedRules;
         this.customRules = customRules;
+        this.simplifyGroups = !!simplifyGroups;
     }
 
     getProxies() {
         return this.config.proxies || [];
     }
 
+    // 优先返回 tag（如果存在），否则返回 name
     getProxyName(proxy) {
-        return proxy.name;
+        return proxy?.tag ?? proxy?.name;
     }
 
     convertProxy(proxy) {
@@ -73,7 +76,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                         ? { 'grpc-service-name': proxy.transport.service_name }
                         : undefined,
                     tfo: proxy.tcp_fast_open,
-                    'skip-cert-verify': proxy.tls?.insecure,
+                    'skip-cert-verify': proxy.tls?.insecure || false,
                     flow: proxy.flow ?? undefined
                 };
             case 'hysteria2':
@@ -117,7 +120,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                         ? { 'grpc-service-name': proxy.transport.service_name }
                         : undefined,
                     tfo: proxy.tcp_fast_open,
-                    'skip-cert-verify': proxy.tls?.insecure,
+                    'skip-cert-verify': proxy.tls?.insecure || false,
                     flow: proxy.flow ?? undefined
                 };
             case 'tuic':
@@ -129,14 +132,14 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     uuid: proxy.uuid,
                     password: proxy.password,
                     'congestion-controller': proxy.congestion,
-                    'skip-cert-verify': proxy.tls?.insecure,
-                    'disable-sni': true,
+                    'skip-cert-verify': proxy.tls?.insecure || false,
+                    'disable-sni': proxy.tls?.disable_sni ?? true,
                     alpn: proxy.tls?.alpn,
                     sni: proxy.tls?.server_name,
                     'udp-relay-mode': 'native'
                 };
             default:
-                return proxy;
+                return DeepCopy(proxy);
         }
     }
 
@@ -156,8 +159,10 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.config.proxies.push(proxy);
     }
 
-    // 💡 自动创建地区测速组
+    // 💡 自动创建地区测速组（保留原实现，初始化 proxy-groups）
     addRegionGroups(proxyList) {
+        this.config['proxy-groups'] = this.config['proxy-groups'] || [];
+
         const regions = {
             '🇭🇰 香港自动': /香港|HK|Hong/i,
             '🇸🇬 新加坡自动': /新加坡|SG|Singapore/i,
@@ -184,10 +189,11 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     }
 
     addAutoSelectGroup(proxyList) {
+        this.config['proxy-groups'] = this.config['proxy-groups'] || [];
+
         const autoName = t('outboundNames.Auto Select');
         if (this.config['proxy-groups']?.some(g => g.name === autoName)) return;
 
-        this.config['proxy-groups'] = this.config['proxy-groups'] || [];
         this.config['proxy-groups'].push({
             name: autoName,
             type: 'url-test',
@@ -200,6 +206,8 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     }
 
     addNodeSelectGroup(proxyList) {
+        this.config['proxy-groups'] = this.config['proxy-groups'] || [];
+
         const autoSelect = t('outboundNames.Auto Select');
         const nodeSelect = t('outboundNames.Node Select');
 
@@ -214,6 +222,8 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     }
 
     addOutboundGroups(outbounds, proxyList) {
+        this.config['proxy-groups'] = this.config['proxy-groups'] || [];
+
         const autoSelect = t('outboundNames.Auto Select');
         const nodeSelect = t('outboundNames.Node Select');
 
@@ -243,6 +253,8 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     }
 
     addCustomRuleGroups(proxyList) {
+        this.config['proxy-groups'] = this.config['proxy-groups'] || [];
+
         if (Array.isArray(this.customRules)) {
             this.customRules.forEach(rule => {
                 this.config['proxy-groups'].push({
@@ -255,11 +267,53 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     }
 
     addFallBackGroup(proxyList) {
+        this.config['proxy-groups'] = this.config['proxy-groups'] || [];
+
         this.config['proxy-groups'].push({
             type: 'select',
             name: t('outboundNames.Fall Back'),
             proxies: [t('outboundNames.Node Select'), ...proxyList]
         });
+    }
+
+    // 新增：生成精简代理组（Node Select + Auto Select + Fall Back）
+    addSimplifiedGroups(proxyList) {
+        this.config['proxy-groups'] = [];
+
+        const autoSelect = t('outboundNames.Auto Select');
+        const nodeSelect = t('outboundNames.Node Select');
+        const fallBack = t('outboundNames.Fall Back');
+
+        // Node Select 放在最前面（select）
+        this.config['proxy-groups'].push({
+            type: 'select',
+            name: nodeSelect,
+            proxies: DeepCopy([autoSelect, 'DIRECT', 'REJECT', ...proxyList])
+        });
+
+        // Auto Select（url-test）
+        this.config['proxy-groups'].push({
+            name: autoSelect,
+            type: 'url-test',
+            proxies: DeepCopy(proxyList),
+            url: 'https://cp.cloudflare.com/generate_204',
+            interval: 600,
+            tolerance: 50,
+            lazy: true
+        });
+
+        // Fall Back
+        this.config['proxy-groups'].push({
+            type: 'select',
+            name: fallBack,
+            proxies: DeepCopy([nodeSelect, ...proxyList])
+        });
+    }
+
+    // 从当前 this.config.proxies 中提取名称并调用 addSimplifiedGroups
+    simplifyProxyGroups() {
+        const proxies = this.getProxies().map(p => this.getProxyName(p)).filter(Boolean);
+        this.addSimplifiedGroups(proxies);
     }
 
     generateRules() {
@@ -272,6 +326,11 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
 
         const { site_rule_providers, ip_rule_providers } = generateClashRuleSets(this.selectedRules, this.customRules);
         this.config['rule-providers'] = { ...site_rule_providers, ...ip_rule_providers };
+
+        // 若启用了简化代理组，优先生成精简组（覆盖现有 proxy-groups）
+        if (this.simplifyGroups) {
+            this.simplifyProxyGroups();
+        }
 
         rules.filter(r => !!r.domain_suffix || !!r.domain_keyword).forEach(rule => {
             rule.domain_suffix?.forEach(s => ruleResults.push(`DOMAIN-SUFFIX,${s},${t('outboundNames.' + rule.outbound)}`));
