@@ -332,22 +332,49 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         const countries = Object.keys(countryGroups).sort((a, b) => a.localeCompare(b));
         const countryGroupNames = [];
 
+        // Exclude or avoid adding nodes to specific "sensitive" country groups.
+        // Per request: "🔒 国内服务" and "🏠 私有网络" should not have nodes added (or be omitted).
+        // We will create the groups but keep their proxies empty, and we will NOT include them
+        // in the countryGroupNames used by Node Select so they won't appear as selectable node groups.
+        const EXCLUDED_COUNTRY_GROUPS = new Set([
+            '🔒 国内服务',
+            '🏠 私有网络'
+        ]);
+
         countries.forEach(country => {
             const { emoji, name, proxies } = countryGroups[country];
             const groupName = `${emoji} ${name}`;
             const norm = normalize(groupName);
             if (!existingNames.has(norm)) {
-                this.config['proxy-groups'].push({
-                    name: groupName,
-                    type: 'url-test',
-                    proxies: proxies,
-                    url: 'https://www.gstatic.com/generate_204',
-                    interval: 300,
-                    lazy: false
-                });
+                // If group is excluded, create it but with an empty proxies list (no nodes)
+                if (EXCLUDED_COUNTRY_GROUPS.has(groupName)) {
+                    this.config['proxy-groups'].push({
+                        name: groupName,
+                        type: 'url-test',
+                        proxies: [], // intentionally empty
+                        url: 'https://www.gstatic.com/generate_204',
+                        interval: 300,
+                        lazy: false
+                    });
+                } else {
+                    this.config['proxy-groups'].push({
+                        name: groupName,
+                        type: 'url-test',
+                        proxies: proxies,
+                        url: 'https://www.gstatic.com/generate_204',
+                        interval: 300,
+                        lazy: false
+                    });
+                    // Only add to countryGroupNames if not excluded so Node Select won't list them
+                    countryGroupNames.push(groupName);
+                }
                 existingNames.add(norm);
+            } else {
+                // If the group already exists but is excluded, ensure we don't add its name to the node-select list
+                if (!EXCLUDED_COUNTRY_GROUPS.has(groupName)) {
+                    countryGroupNames.push(groupName);
+                }
             }
-            countryGroupNames.push(groupName);
         });
 
         const nodeSelectGroup = this.config['proxy-groups'].find(g => g && g.name === this.t('outboundNames.Node Select'));
