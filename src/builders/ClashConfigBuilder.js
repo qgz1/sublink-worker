@@ -19,6 +19,12 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.enableClashUI = enableClashUI;
         this.externalController = externalController;
         this.externalUiDownloadUrl = externalUiDownloadUrl;
+
+        // 需要保持不带节点的组名（硬编码为你提供的中文 emoji 名）
+        this.excludedCountryGroups = new Set([
+            '🔒 国内服务',
+            '🏠 私有网络'
+        ]);
     }
 
     getProxies() {
@@ -332,48 +338,25 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         const countries = Object.keys(countryGroups).sort((a, b) => a.localeCompare(b));
         const countryGroupNames = [];
 
-        // Exclude or avoid adding nodes to specific "sensitive" country groups.
-        // Per request: "🔒 国内服务" and "🏠 私有网络" should not have nodes added (or be omitted).
-        // We will create the groups but keep their proxies empty, and we will NOT include them
-        // in the countryGroupNames used by Node Select so they won't appear as selectable node groups.
-        const EXCLUDED_COUNTRY_GROUPS = new Set([
-            '🔒 国内服务',
-            '🏠 私有网络'
-        ]);
-
+        // Create country groups; for excluded groups we create them but keep proxies empty here already
         countries.forEach(country => {
             const { emoji, name, proxies } = countryGroups[country];
             const groupName = `${emoji} ${name}`;
             const norm = normalize(groupName);
             if (!existingNames.has(norm)) {
-                // If group is excluded, create it but with an empty proxies list (no nodes)
-                if (EXCLUDED_COUNTRY_GROUPS.has(groupName)) {
-                    this.config['proxy-groups'].push({
-                        name: groupName,
-                        type: 'url-test',
-                        proxies: [], // intentionally empty
-                        url: 'https://www.gstatic.com/generate_204',
-                        interval: 300,
-                        lazy: false
-                    });
-                } else {
-                    this.config['proxy-groups'].push({
-                        name: groupName,
-                        type: 'url-test',
-                        proxies: proxies,
-                        url: 'https://www.gstatic.com/generate_204',
-                        interval: 300,
-                        lazy: false
-                    });
-                    // Only add to countryGroupNames if not excluded so Node Select won't list them
-                    countryGroupNames.push(groupName);
-                }
+                this.config['proxy-groups'].push({
+                    name: groupName,
+                    type: 'url-test',
+                    // 如果是被排除的组，先放空数组；最终在 formatConfig 会再次强制清空，保证不会被后续步骤填充
+                    proxies: this.excludedCountryGroups.has(groupName) ? [] : proxies,
+                    url: 'https://www.gstatic.com/generate_204',
+                    interval: 300,
+                    lazy: false
+                });
                 existingNames.add(norm);
-            } else {
-                // If the group already exists but is excluded, ensure we don't add its name to the node-select list
-                if (!EXCLUDED_COUNTRY_GROUPS.has(groupName)) {
-                    countryGroupNames.push(groupName);
-                }
+            }
+            if (!this.excludedCountryGroups.has(groupName)) {
+                countryGroupNames.push(groupName);
             }
         });
 
@@ -406,7 +389,17 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         };
         const ruleResults = emitClashRules(rules, this.t);
 
+        // sanitize 可能会对 proxy-groups 做调整（也可能在某些实现中填充 proxies）
         sanitizeClashProxyGroups(this.config);
+
+        // 强制把需要"不带节点"的分组的 proxies 设为空，放在 sanitize 之后以覆盖任何回填行为
+        if (Array.isArray(this.config['proxy-groups'])) {
+            this.config['proxy-groups'].forEach(group => {
+                if (group && typeof group.name === 'string' && this.excludedCountryGroups.has(group.name)) {
+                    group.proxies = [];
+                }
+            });
+        }
 
         this.config.rules = [
             ...ruleResults,
