@@ -19,8 +19,6 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.enableClashUI = enableClashUI;
         this.externalController = externalController;
         this.externalUiDownloadUrl = externalUiDownloadUrl;
-
-        // 需要保持不带节点的组名（硬编码为你提供的中文 emoji 名）
         this.excludedCountryGroups = new Set([
             '🔒 国内服务',
             '🏠 私有网络'
@@ -202,7 +200,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     ...(proxy['min-idle-session'] !== undefined ? { 'min-idle-session': proxy['min-idle-session'] } : {}),
                 };
             default:
-                return proxy; // Return as-is if no specific conversion is defined
+                return proxy;
         }
     }
 
@@ -338,7 +336,6 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         const countries = Object.keys(countryGroups).sort((a, b) => a.localeCompare(b));
         const countryGroupNames = [];
 
-        // Create country groups; for excluded groups we create them but keep proxies empty here already
         countries.forEach(country => {
             const { emoji, name, proxies } = countryGroups[country];
             const groupName = `${emoji} ${name}`;
@@ -347,7 +344,6 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                 this.config['proxy-groups'].push({
                     name: groupName,
                     type: 'url-test',
-                    // 如果是被排除的组，先放空数组；最终在 formatConfig 会再次强制清空，保证不会被后续步骤填充
                     proxies: this.excludedCountryGroups.has(groupName) ? [] : proxies,
                     url: 'https://www.gstatic.com/generate_204',
                     interval: 300,
@@ -375,7 +371,6 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.manualGroupName = manualGroupName;
     }
 
-    // 生成规则
     generateRules() {
         return generateRules(this.selectedRules, this.customRules);
     }
@@ -389,14 +384,12 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         };
         const ruleResults = emitClashRules(rules, this.t);
 
-        // sanitize 可能会对 proxy-groups 做调整（也可能在某些实现中填充 proxies）
         sanitizeClashProxyGroups(this.config);
 
-        // 强制把需要"不带节点"的分组的 proxies 设为空，放在 sanitize 之后以覆盖任何回填行为
         if (Array.isArray(this.config['proxy-groups'])) {
             this.config['proxy-groups'].forEach(group => {
                 if (group && typeof group.name === 'string' && this.excludedCountryGroups.has(group.name)) {
-                    group.proxies = [];
+                    group.proxies = ['DIRECT'];
                 }
             });
         }
@@ -406,7 +399,6 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
             `MATCH,${this.t('outboundNames.Fall Back')}`
         ];
 
-        // Enable Clash UI (external controller/dashboard) when requested or when custom UI params are provided
         if (this.enableClashUI || this.externalController || this.externalUiDownloadUrl) {
             const defaultController = '0.0.0.0:9090';
             const defaultUiPath = './ui';
