@@ -7,7 +7,7 @@ import { buildSelectorMembers, buildNodeSelectMembers, uniqueNames } from './hel
 import { emitClashRules, sanitizeClashProxyGroups } from './helpers/clashConfigUtils.js';
 
 export class ClashConfigBuilder extends BaseConfigBuilder {
-    constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent, groupByCountry = false, enableClashUI = false, externalController, externalUiDownloadUrl) {
+    constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent, groupByCountry = false, enableClashUI = false, externalController, externalUiDownloadUrl, forcedDomainRules = []) {
         if (!baseConfig) {
             baseConfig = CLASH_CONFIG;
         }
@@ -19,6 +19,9 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.enableClashUI = enableClashUI;
         this.externalController = externalController;
         this.externalUiDownloadUrl = externalUiDownloadUrl;
+        // New: list of rule strings (Clash rule lines) that will be prepended to final rules.
+        // Example entries: "DOMAIN-SUFFIX,ggff.net,🌐 非中国" or "DOMAIN-KEYWORD,ggff,🌐 非中国"
+        this.forcedDomainRules = forcedDomainRules || [];
         this.excludedCountryGroups = new Set([
             '🔒 国内服务',
             '🏠 私有网络'
@@ -394,7 +397,15 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
             });
         }
 
+        // New: allow prepending forced domain rules to the generated rules.
+        // This is useful to override RULE-SET entries that would otherwise send some domains to DIRECT.
+        // Example forcedDomainRules entry: "DOMAIN-SUFFIX,ggff.net,🌐 非中国"
+        const overrideRules = Array.isArray(this.forcedDomainRules)
+            ? this.forcedDomainRules.map(r => (typeof r === 'string' ? r.trim() : '')).filter(Boolean)
+            : [];
+
         this.config.rules = [
+            ...overrideRules,
             ...ruleResults,
             `MATCH,${this.t('outboundNames.Fall Back')}`
         ];
