@@ -7,7 +7,7 @@ import { buildSelectorMembers, buildNodeSelectMembers, uniqueNames } from './hel
 import { emitClashRules, sanitizeClashProxyGroups } from './helpers/clashConfigUtils.js';
 
 export class ClashConfigBuilder extends BaseConfigBuilder {
-    constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent, groupByCountry = false, enableClashUI = false, externalController, externalUiDownloadUrl, forcedDomainRules = []) {
+    constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent, groupByCountry = false, enableClashUI = false, externalController, externalUiDownloadUrl, options = {}) {
         if (!baseConfig) {
             baseConfig = CLASH_CONFIG;
         }
@@ -19,9 +19,15 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.enableClashUI = enableClashUI;
         this.externalController = externalController;
         this.externalUiDownloadUrl = externalUiDownloadUrl;
-        // New: list of rule strings (Clash rule lines) that will be prepended to final rules.
-        // Example entries: "DOMAIN-SUFFIX,ggff.net,🌐 非中国" or "DOMAIN-KEYWORD,ggff,🌐 非中国"
-        this.forcedDomainRules = forcedDomainRules || [];
+
+        // New options:
+        // forcedDomainRules: array of rule strings to prepend (e.g. ["DOMAIN-SUFFIX,ggff.net,🌐 非中国"])
+        // forceExcludedCountryGroupsToDirect: when true (default) keep legacy behavior that forces excluded country groups to ['DIRECT'].
+        this.forcedDomainRules = Array.isArray(options.forcedDomainRules) ? options.forcedDomainRules : [];
+        this.forceExcludedCountryGroupsToDirect = typeof options.forceExcludedCountryGroupsToDirect === 'boolean'
+            ? options.forceExcludedCountryGroupsToDirect
+            : true;
+
         this.excludedCountryGroups = new Set([
             '🔒 国内服务',
             '🏠 私有网络'
@@ -389,7 +395,8 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
 
         sanitizeClashProxyGroups(this.config);
 
-        if (Array.isArray(this.config['proxy-groups'])) {
+        // Only force excluded country groups to DIRECT when option enabled.
+        if (this.forceExcludedCountryGroupsToDirect && Array.isArray(this.config['proxy-groups'])) {
             this.config['proxy-groups'].forEach(group => {
                 if (group && typeof group.name === 'string' && this.excludedCountryGroups.has(group.name)) {
                     group.proxies = ['DIRECT'];
@@ -397,9 +404,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
             });
         }
 
-        // New: allow prepending forced domain rules to the generated rules.
-        // This is useful to override RULE-SET entries that would otherwise send some domains to DIRECT.
-        // Example forcedDomainRules entry: "DOMAIN-SUFFIX,ggff.net,🌐 非中国"
+        // Prepend forced domain rules (if any) so they take priority over RULE-SET entries.
         const overrideRules = Array.isArray(this.forcedDomainRules)
             ? this.forcedDomainRules.map(r => (typeof r === 'string' ? r.trim() : '')).filter(Boolean)
             : [];
