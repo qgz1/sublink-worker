@@ -7,7 +7,7 @@ import { buildSelectorMembers, buildNodeSelectMembers, uniqueNames } from './hel
 import { emitClashRules, sanitizeClashProxyGroups } from './helpers/clashConfigUtils.js';
 
 export class ClashConfigBuilder extends BaseConfigBuilder {
-    constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent, groupByCountry = false, enableClashUI = false, externalController, externalUiDownloadUrl, options = {}) {
+    constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent, groupByCountry = false, enableClashUI = false, externalController, externalUiDownloadUrl) {
         if (!baseConfig) {
             baseConfig = CLASH_CONFIG;
         }
@@ -19,19 +19,6 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.enableClashUI = enableClashUI;
         this.externalController = externalController;
         this.externalUiDownloadUrl = externalUiDownloadUrl;
-
-        // New options:
-        // forcedDomainRules: array of rule strings to prepend (e.g. ["DOMAIN-SUFFIX,ggff.net,🌐 非中国"])
-        // forceExcludedCountryGroupsToDirect: when true (default) keep legacy behavior that forces excluded country groups to ['DIRECT'].
-        this.forcedDomainRules = Array.isArray(options.forcedDomainRules) ? options.forcedDomainRules : [];
-        this.forceExcludedCountryGroupsToDirect = typeof options.forceExcludedCountryGroupsToDirect === 'boolean'
-            ? options.forceExcludedCountryGroupsToDirect
-            : true;
-
-        this.excludedCountryGroups = new Set([
-            '🔒 国内服务',
-            '🏠 私有网络'
-        ]);
     }
 
     getProxies() {
@@ -209,7 +196,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     ...(proxy['min-idle-session'] !== undefined ? { 'min-idle-session': proxy['min-idle-session'] } : {}),
                 };
             default:
-                return proxy;
+                return proxy; // Return as-is if no specific conversion is defined
         }
     }
 
@@ -353,16 +340,14 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                 this.config['proxy-groups'].push({
                     name: groupName,
                     type: 'url-test',
-                    proxies: this.excludedCountryGroups.has(groupName) ? [] : proxies,
+                    proxies: proxies,
                     url: 'https://www.gstatic.com/generate_204',
                     interval: 300,
                     lazy: false
                 });
                 existingNames.add(norm);
             }
-            if (!this.excludedCountryGroups.has(groupName)) {
-                countryGroupNames.push(groupName);
-            }
+            countryGroupNames.push(groupName);
         });
 
         const nodeSelectGroup = this.config['proxy-groups'].find(g => g && g.name === this.t('outboundNames.Node Select'));
@@ -380,6 +365,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.manualGroupName = manualGroupName;
     }
 
+    // 生成规则
     generateRules() {
         return generateRules(this.selectedRules, this.customRules);
     }
@@ -395,26 +381,12 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
 
         sanitizeClashProxyGroups(this.config);
 
-        // Only force excluded country groups to DIRECT when option enabled.
-        if (this.forceExcludedCountryGroupsToDirect && Array.isArray(this.config['proxy-groups'])) {
-            this.config['proxy-groups'].forEach(group => {
-                if (group && typeof group.name === 'string' && this.excludedCountryGroups.has(group.name)) {
-                    group.proxies = ['DIRECT'];
-                }
-            });
-        }
-
-        // Prepend forced domain rules (if any) so they take priority over RULE-SET entries.
-        const overrideRules = Array.isArray(this.forcedDomainRules)
-            ? this.forcedDomainRules.map(r => (typeof r === 'string' ? r.trim() : '')).filter(Boolean)
-            : [];
-
         this.config.rules = [
-            ...overrideRules,
             ...ruleResults,
             `MATCH,${this.t('outboundNames.Fall Back')}`
         ];
 
+        // Enable Clash UI (external controller/dashboard) when requested or when custom UI params are provided
         if (this.enableClashUI || this.externalController || this.externalUiDownloadUrl) {
             const defaultController = '0.0.0.0:9090';
             const defaultUiPath = './ui';
